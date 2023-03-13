@@ -1,4 +1,4 @@
-# UAV-Projet-Leibniz-Universit-t-Hannover
+# UAV-Projet-Leibniz-Universität-Hannover
 
 ## With the launch
 ```console
