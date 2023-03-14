@@ -20,7 +20,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.graphWidget)
         self.resize(850, 600)
         self.setWindowTitle('Mission Displayer')
-        
 
         # Buttons
         start_mission = QPushButton(self.graphWidget)
@@ -34,18 +33,18 @@ class MainWindow(QtWidgets.QMainWindow):
         start_mission.setGeometry(QtCore.QRect(0,0,100,25))
         stop_mission.setGeometry(QtCore.QRect(105,0,100,25))
         reset_mission.setGeometry(QtCore.QRect(205,0,100,25))
+
+        start_mission.clicked.connect(self.start_recording_mission)
+        stop_mission.clicked.connect(self.start_recording_mission)
         # Test data
-        self.positions = [[0,0]]
+        self.positions = np.zeros((30,2))
+        self.state=None
 
         self.vehicle = pg.ArrowItem(angle=180, tipAngle=30, baseAngle=-30, headLen=40, tailLen=None, brush=(40, 138, 241, 180))
         self.vehicle.setPos(0, 0)
 
-        pen = pg.mkPen(color='#288af1', width=3, style=QtCore.Qt.DashLine)
-
         # Creating the widgets
         self.graphWidget.setBackground('w')
-        # self.graph_item = pg.GraphItem(pen=pen,symbol='star',symbolSize=30, symbolBrush='#288af1',name='Sensor 1')
-        # self.graph_item = pg.GraphItem(pen=pen)
         self.p = self.graphWidget.addPlot()
 
         # Setting the plot
@@ -58,20 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.p.setTitle("UAV Project Mission Displayer", color="k", size="20px")
 
         self.p.addItem(self.vehicle)
-        # self.p.addItem(self.graph_item)
         self.i = 0
-
-        ############### Cage ###############
-        # Cage
-        # s1 = pg.ScatterPlotItem(size=50, pen=pg.mkPen(None), symbol='s', brush=pg.mkBrush(255, 0, 0, 225))
-        # spots = [{'pos': [0, 0]}]
-        # s1.addPoints(spots)
-        # self.p.addItem(s1)
-
-        # Line
-        # curve = pg.PlotCurveItem(pen=({'color': '#12f843', 'width': 3}), skipFiniteCheck=True)
-        # self.p.addItem(curve)
-        # curve.setData(x=[0, 0], y=[0, 1000])
 
         # Position trace
         self.trace = pg.PlotCurveItem(pen=({'color': '#f12828', 'width': 3, 'style': QtCore.Qt.DashLine}), skipFiniteCheck=True)
@@ -79,20 +65,33 @@ class MainWindow(QtWidgets.QMainWindow):
         ############### Cage ###############
 
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(20)
+        self.timer.setInterval(50)
         self.timer.timeout.connect(self.update_plot_data)
         self.timer.start()
-
         self.p.setXRange(-5, 5)
         self.p.setYRange(-1, 15)
         self.show()
-
+    
     def update_plot_data(self):
-        # self.vehicle.setPos(self.usbl_data.position.y,-self.usbl_data.position.x)
-        # self.vehicle.setStyle(angle=270-self.NED_to_cage(self.heading))
-        X = np.array(self.positions)
-        self.trace.setData(x=X.T[1], y=-X.T[0])
-        self.i += 1
+        if self.state is not None:
+            x,y=self.state[:2]
+            self.vehicle.setPos(x,y)
+            self.vehicle.setStyle(angle=self.state[2])
+            self.trace.setData(x=self.positions[:,0], y=self.positions[:,1])
+            self.i += 1
+
+    def start_recording_mission(self):
+        # Reinitialize the data
+        print('Mission is recording')
+    
+    def stop_recording_mission(self):
+        # Stop recording and save the data
+        print('Mission is over, stopped recording')
+
+    def update_state(self,state):
+        self.state=state
+        self.positions[:-1]=self.positions[1:]
+        self.positions[-1]=state[:2]
 
     def sawtooth(self, x):
         return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))
