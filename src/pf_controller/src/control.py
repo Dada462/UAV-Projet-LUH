@@ -1,9 +1,11 @@
 #!/usr/bin/env python
+
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3
 from numpy import cos, sin, tanh, pi
+import threading
 from tools import sawtooth, R, path_info_update,mat_reading
 
 class PFController():
@@ -12,7 +14,10 @@ class PFController():
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
         self.state=np.zeros(3)
         self.init_path()
-        self.main()
+        # ros_thread = threading.Thread(target=self.main)
+        # ros_thread.start()
+        # ros_thread.join()
+        # self.main()
 
     def main(self):
         command_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
