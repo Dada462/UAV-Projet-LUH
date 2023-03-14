@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.0.2)
-project(robot_state)
+project(pf_controller)
 
 find_package(catkin REQUIRED COMPONENTS
   rospy
@@ -21,6 +21,6 @@ include_directories(
 )
 
 catkin_install_python(PROGRAMS
-  src/state_pub.py
+  src/control.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

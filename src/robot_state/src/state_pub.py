@@ -11,8 +11,6 @@ class RobotState():
         rospy.Subscriber("/mavros/local_position/velocity_body", TwistStamped, self.body_velocity_info)
         rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_info)
         self.robot_state_pub()
-        # rospy.Publisher("/robot_state", TwistStamped, self.robot_state_pub,queue_size=10)
-        # rospy.spin()
 
     def quaternion_to_euler(self,q):
         # Extract components of the quaternion
