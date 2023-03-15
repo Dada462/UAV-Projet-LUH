@@ -1,7 +1,8 @@
 import pyqtgraph as pg
 import numpy as np
 import sys
-import threading
+from datetime import datetime
+import time
 from numpy import pi
 from pyqtgraph.Qt import QtCore
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
@@ -28,7 +29,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         start_mission.setText('Start Mission')
         stop_mission.setText('Stop Mission')
-        reset_mission.setText('Reset Mission')
+        reset_mission.setText('Reset Data')
 
         start_mission.setGeometry(QtCore.QRect(0,0,100,25))
         stop_mission.setGeometry(QtCore.QRect(105,0,100,25))
@@ -36,6 +37,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         start_mission.clicked.connect(self.start_recording_mission)
         stop_mission.clicked.connect(self.stop_recording_mission)
+        reset_mission.clicked.connect(self.reset_mission_data)
         self.mission_state={'start':False,'go_home':False}
         # Text box
         self.nameLabel = QLabel(self)
@@ -53,6 +55,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Test data
         self.positions = np.zeros((10**4,3))
+        self.positions_times=np.zeros(10**4)-1
         self.pos_counter=0
         self.state=None
         self.pfc=PF_controller
@@ -111,7 +114,6 @@ class MainWindow(QtWidgets.QMainWindow):
         except:
             pass
         print('Parameters: ', vars)
-
     
     def update_plot_data(self):
         if self.state is not None:
@@ -129,23 +131,38 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def stop_recording_mission(self):
         # Stop recording and save the data
+        print('Mission is over')
+        
+        self.mission_results()
+        now = datetime.now()
+        dt_string = now.strftime("%d.%m.%Y_%H.%M.%S")
+        print(self.positions_times.shape,self.positions.shape)
+        positions=np.hstack((self.positions,self.positions_times.reshape((-1,1))))
+        
+        np.save('results/positions_'+dt_string+'.npy',positions)
+        np.save('results/path_to_follow_'+dt_string+'.npy',self.pfc.path_to_follow.X)
+
         self.mission_state['start']=False
         self.pfc.s=0
         self.positions=self.positions*0
-        print('Mission is over')
+
+    def reset_mission_data(self):
+        self.pfc.s=0
+        self.positions=self.positions*0
 
     def update_state(self,state,s_pos):
         self.state=state
         # self.positions[:-1]=self.positions[1:]
         self.positions[self.pos_counter]=state
-        # spots = [{'pos': s_pos}]
-        # self.point_to_follow.addPoints(spots)
+        self.positions_times[self.pos_counter]=time.time()
         self.point_to_follow.setData(x=s_pos[0],y=s_pos[1])
         self.pos_counter =(self.pos_counter+1)%(10**4)
 
     def sawtooth(self, x):
         return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))
 
+    def mission_results(self):
+        print('calculating results')
 
 if __name__=='__main__':
     ################################## Pyqt ##################################

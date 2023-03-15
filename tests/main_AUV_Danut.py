@@ -44,7 +44,7 @@ L=1
 r=0.25 #Size of the robot on the drawings, purely for drawing purposes
 
 # Drawing and window info
-dt, w_size, w_shift = 0.01, 30, 0
+dt, w_size, w_shift = 0.01, 15, 0
 fig, ax = plt.subplots(figsize=(8, 7))
 
 # Lists to stock the information. For viewing resulsts after the simulation
@@ -59,7 +59,8 @@ theta0, dtheta0 = 0, 0 # Initial orientation and angular velocity
 s0 = 100
 
 # mat_reading(lambda t : 5*np.array([cos(t),sin(0.9*t)])) # The path the robot has to follow
-path_to_follow = mat_reading(lambda t : 5*np.array([cos(t),sin(0.9*t)])) # The path the robot has to follow  # The path the robot has to follow
+# path_to_follow = mat_reading(lambda t : 5*np.array([cos(t),sin(0.9*t)])) # The path the robot has to follow  # The path the robot has to follow
+path_to_follow=mat_reading(lambda t : 2.5*(2+sin(10*t))*np.array([cos(t),sin(t)])) # The path the robot has to follow
 # path_to_follow = mat_reading(lambda a,b : 5+14*np.array([cos(a),sin(0.9*b)]))  # The path the robot has to follow
 # path_to_follow = mat_reading(lambda a,b : 5+14*np.array([cos(0.9*a),0.5*sin(0.9*b)]))  # The path the robot has to follow
 # path_to_follow = mat_reading(lambda a,b : (a**2+b**2)**.5*np.array([0.5*a,sin(2*b)]))  # The path the robot has to follow
