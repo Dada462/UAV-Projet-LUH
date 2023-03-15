@@ -1,32 +1,36 @@
 # import pyqtgraph.examples
 # pyqtgraph.examples.run()
+import sys
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtWidgets import QMainWindow, QWidget, QLabel, QLineEdit
+from PyQt5.QtWidgets import QPushButton
+from PyQt5.QtCore import QSize    
 
-import numpy as np
-import pyqtgraph as pg
-from pyqtgraph.Qt import QtCore, QtWidgets
-import pyqtgraph.parametertree as ptree
-from time import perf_counter
+class MainWindow(QMainWindow):
+    def __init__(self):
+        QMainWindow.__init__(self)
 
-translate = QtCore.QCoreApplication.translate
+        self.setMinimumSize(QSize(320, 140))    
+        self.setWindowTitle("PyQt Line Edit example (textfield) - pythonprogramminglanguage.com") 
 
-app = pg.mkQApp()
+        self.nameLabel = QLabel(self)
+        self.nameLabel.setText('Name:')
+        self.line = QLineEdit(self)
 
-# pt = ptree.ParameterTree(showHeader=False)
-# param = ptree.Parameter.create(name=translate("ScatterPlot", "Parameters"), type="group")
-# pt.setParameters(param)
-p = pg.PlotWidget()
-p1 = pg.PlotWidget()
-splitter = QtWidgets.QSplitter()
-# splitter.addWidget(pt)
-splitter.addWidget(p)
-splitter.addWidget(p1)
-splitter.setSizes([300, p.width()])
-splitter.show()
+        self.line.move(80, 20)
+        self.line.resize(200, 32)
+        self.nameLabel.move(20, 20)
 
-w = pg.GraphicsLayoutWidget()
-p1 = w.addPlot(row=0, col=0)
-p2 = w.addPlot(row=0, col=1)
-p=w.addItem()
-v = w.addViewBox(row=1, col=0, colspan=2)
-w.show()
-pg.exec()
+        pybutton = QPushButton('OK', self)
+        pybutton.clicked.connect(self.clickMethod)
+        pybutton.resize(200,32)
+        pybutton.move(80, 60)        
+
+    def clickMethod(self):
+        print('Your name: ' + self.line.text())
+
+if __name__ == "__main__":
+    app = QtWidgets.QApplication(sys.argv)
+    mainWin = MainWindow()
+    mainWin.show()
+    sys.exit( app.exec_() )
