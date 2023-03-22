@@ -3,6 +3,7 @@ import rospy
 from std_msgs.msg import String,Float32MultiArray
 from geometry_msgs.msg import TwistStamped,PoseStamped
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 class RobotState():
     def __init__(self):
@@ -43,9 +44,10 @@ class RobotState():
     def local_pose_info(self,data):
         q=data.pose.orientation.x,data.pose.orientation.y,data.pose.orientation.z,data.pose.orientation.w
         position=data.pose.position.x,data.pose.position.y,data.pose.position.z
-        _,_,theta=self.quaternion_to_euler(q)
+        r=Rotation.from_quat(q)
+        # _,_,theta=self.quaternion_to_euler(q)
         self.state[:3]=position
-        self.state[6]=theta
+        self.state[6:9]=r.as_euler('ZYX')
 
     def robot_state_pub(self):
         pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
