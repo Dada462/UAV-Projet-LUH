@@ -239,18 +239,3 @@ def key_press():
     if keyboard.is_pressed("space"):
         end_of_path = 1
     return key
-
-
-def colors():
-    color_file=open('Readables/AstroColors.txt', 'r').read()
-    x=color_file.split('\n')
-    return x
-def color(C,Vmin,Vmax,V):
-    if V>=Vmax:
-        return C[-1]
-    elif V<=Vmin:
-        return C[0]
-    else:
-        i=(V-Vmin)/(Vmax-Vmin)
-        i=int(i*(len(C)-1))
-        return C[i]

@@ -109,7 +109,7 @@ class PFController():
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(2*t)]),[0,15]) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(0.9*t)])) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(t)])) # The path the robot has to follow
-        # self.path_to_follow=mat_reading(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)])) # The path the robot has to follow
+        self.path_to_follow=mat_reading(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)])) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : np.array([t,-10+t*0]),[-20,20]) # The path the robot has to follow
         self.s=0
         self.vars=1.25,1.5,1.8,0.09,3,1
@@ -192,7 +192,7 @@ class PFController():
         dpsi=ddelta+k2*sawtooth(delta-psi)
         dbeta=dpsi-dtheta_m+dtheta_c
 
-        nu_d=0.5
+        nu_d=1
         dnu=k1*(nu_d-nu)
         # theta_m_d=pi/4
         # dtheta_m_d=0
