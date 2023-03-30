@@ -106,7 +106,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # Path
             self.path = pg.PlotCurveItem(pen=({'color': '#3486F4', 'width': 3}), skipFiniteCheck=True)
             self.point_to_follow = pg.ScatterPlotItem(size=10, pen=pg.mkPen(None), brush='#34F44C')
-            self.path.setData(x=self.pfc.path_to_follow.X[:,0], y=self.pfc.path_to_follow.X[:,1])
+            self.path.setData(x=self.pfc.path_to_follow.points[:,0], y=self.pfc.path_to_follow.points[:,1])
             
             self.p.addItem(self.path)
             self.p.addItem(self.point_to_follow)
@@ -122,8 +122,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         
         if __name__!='__main__':
-            xrange=[np.min(self.pfc.path_to_follow.X[:,0]),np.max(self.pfc.path_to_follow.X[:,0])]
-            yrange=[np.min(self.pfc.path_to_follow.X[:,1]),np.max(self.pfc.path_to_follow.X[:,1])]
+            xrange=[np.min(self.pfc.path_to_follow.points[:,0]),np.max(self.pfc.path_to_follow.points[:,0])]
+            yrange=[np.min(self.pfc.path_to_follow.points[:,1]),np.max(self.pfc.path_to_follow.points[:,1])]
             range=np.min([xrange[0],yrange[0]]),np.max([xrange[1],yrange[1]])
             self.p.setXRange(*range)
             self.p.setYRange(*range)

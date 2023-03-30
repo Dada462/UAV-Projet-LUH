@@ -4,14 +4,18 @@ import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stamped,Quaternion
 from mavros_msgs.msg import PositionTarget,AttitudeTarget
+from sensor_msgs.msg import Imu
 from numpy import cos, sin, tanh, pi
 import threading
-from tools import sawtooth, R, R3, path_info_update,mat_reading
+from tools_optimized import Path,R,sawtooth
 from MissionDisplayer import MainWindow
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import sys
 from scipy.spatial.transform import Rotation
+from scipy import signal
 import matplotlib.pyplot as plt
+from time import time
+from scipy.linalg import expm,logm
 
 class PID():
     def __init__(self):
@@ -21,6 +25,7 @@ class PFController():
     def __init__(self):
         rospy.init_node('pf_controller', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
+        # rospy.Subscriber('/mavros/imu/data', Imu, self.imu_test)
         self.state=np.zeros(6)
         self.init_path()
         
@@ -31,7 +36,22 @@ class PFController():
         ros_thread.start()
 
         sys.exit(app.exec_())
-   
+    
+    # def imu_test(self,data):
+    #     z=data.linear_acceleration.z
+    #     # self.imu_data.append(z)
+    #     try:
+    #         self.displayer.data_to_plotx.append(time())
+    #         self.displayer.data_to_ploty1.append(z-9.81)
+    #     except:
+    #         pass
+    
+    def adj(self,w):
+        return np.array([[0,-w[2],w[1]] , [w[2],0,-w[0]] , [-w[1],w[0],0]])
+
+    def adj_inv(self,A):
+        return np.array([A[2,1],A[0,2],A[1,0]])
+    
     def main(self):
         command_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
@@ -42,7 +62,8 @@ class PFController():
         i=0
         self.PID=PID()
         while not rospy.is_shutdown():
-            s_pos=path_info_update(self.path_to_follow, self.s).X.reshape((2,1))
+            # s_pos=path_info_update(self.path_to_follow, self.s).X.reshape((2,1))
+            s_pos=self.path_to_follow.local_info(self.s).X.reshape((2,1))
             self.displayer.update_state(self.state,s_pos)
             # u=self.LPF_control_kin(self.state)
             u=self.LPF_control_dyn()
@@ -64,37 +85,49 @@ class PFController():
                 # command.yaw=u[2]
                 # accel_command_pub.publish(command)
                 
-                msg = AttitudeTarget()
-                msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                msg.thrust=0.5
-                msg.body_rate=Vector3(*u)
-                attitude_pub.publish(msg)
-
-
-                # # Speed control
-                # u=self.speed_control()
                 # msg = AttitudeTarget()
                 # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
                 # msg.thrust=0.5
                 # msg.body_rate=Vector3(*u)
                 # attitude_pub.publish(msg)
 
+
+                # # Speed control
+                # # u=self.speed_control()
+                # msg = AttitudeTarget()
+                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # msg.thrust=0.5
+                # msg.body_rate=Vector3(0,0,0)
+                # attitude_pub.publish(msg)
+                
+                # # Join a point
+                T=20
+                t=i/f
+                # P=signal.square(2 * np.pi * t/(2*T))*np.array([-1,1])*10
+                P=R(2 * np.pi * t/T)[:,0]*10
+                command=PoseStamped()
+                command.pose.position=Point(*P,10)
+                go_home_pub.publish(command)
+               
+                
+                
                 # # Using point joining of the FC
                 # command=PoseStamped()
                 # command.pose.position=Point(*s_pos,10)
                 # go_home_pub.publish(command)
+            
             elif self.displayer.mission_state['keyboard']:
                 key=np.array([self.displayer.keyboard]).reshape(-1,2)
                 D=np.array([[0,-1,0],[1,0,0],[0,0,-1]])
-                u=0.09*D@(key[:,0]-key[:,1])
-                # thrust+=0.05/f*u[0]
+                u=D@(key[:,0]-key[:,1])
                 msg = AttitudeTarget()
                 msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                # msg.thrust=0.5+0.1*u[0]/0.5
-                msg.thrust=0.5
-                w=np.flip(self.full_state[6:9])
-                w[2]=0
-                msg.body_rate=Vector3(*2*(u-w))
+                
+                pz,kd,kp=self.vars
+                msg.thrust=0.5-kd*self.full_state[5]+kp*(pz-self.full_state[2])
+                # w=np.flip(self.full_state[6:9])
+                # w[2]=0
+                # msg.body_rate=Vector3(*2*(u-w)[:2],0)
                 attitude_pub.publish(msg)
             else:
                 command=PoseStamped()
@@ -109,10 +142,17 @@ class PFController():
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(2*t)]),[0,15]) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(0.9*t)])) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : 5*np.array([cos(t),sin(t)])) # The path the robot has to follow
-        self.path_to_follow=mat_reading(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)])) # The path the robot has to follow
+        # self.path_to_follow=mat_reading(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)])) # The path the robot has to follow
         # self.path_to_follow=mat_reading(lambda t : np.array([t,-10+t*0]),[-20,20]) # The path the robot has to follow
+        
+        # self.path_to_follow=Path(lambda t : 5*np.array([cos(t),sin(2*t)]),[0,15],type='parametric')
+        # self.path_to_follow=Path(lambda t : 5*np.array([cos(t),sin(0.9*t)]),[-10,10],type='parametric')
+        self.path_to_follow=Path(lambda t : 2*np.array([cos(t),sin(t)]),[-10,10],type='parametric')
+        # self.path_to_follow=Path(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)]),[-10,10],type='parametric')
+        # self.path_to_follow=Path(lambda t : np.array([t,-10+t*0]),[-20,20],type='parametric')
         self.s=0
-        self.vars=1.25,1.5,1.8,0.09,3,1
+        # self.vars=1.25,1.5,1.8,0.09,3,1
+        self.vars=10,1,1
     
     def update_state(self,data):
         speed=data.data[3:6]
@@ -140,7 +180,8 @@ class PFController():
         X = x[0:2]
         theta_m = x[4]
         s = self.s
-        F = path_info_update(self.path_to_follow, s)
+        # F = path_info_update(self.path_to_follow, s)
+        F=self.path_to_follow.local_info(s)
         theta_c = F.psi
         theta = sawtooth(theta_m-theta_c)
         s1, y1 = R(theta_c).T@(X-F.X)
@@ -171,9 +212,11 @@ class PFController():
         nu = np.linalg.norm(Vt)
         beta=np.arctan2(v,u)
 
-        print('Speed:',np.round(nu,2))
+        # print('Speed:',np.round(nu,2))
         
-        F = path_info_update(self.path_to_follow, s)
+        # F = path_info_update(self.path_to_follow, s)
+        F=self.path_to_follow.local_info(s)
+
         theta_c = F.psi
         s1, y1 = R(theta_c).T@(X-F.X)
         theta = sawtooth(theta_m-theta_c)
@@ -182,11 +225,12 @@ class PFController():
         ks = 0.7
         ds = cos(psi)*nu + ks*s1
         self.ds=ds
-        dtheta_c = F.C_c*ds
-        ds1, dy1 = R(theta)@Vt-ds*np.array([1-F.C_c*y1, F.C_c*s1])
+        return 0
+        dtheta_c = F.C*ds
+        ds1, dy1 = R(theta)@Vt-ds*np.array([1-F.C*y1, F.C*s1])
 
         psi_a=1.3
-        y10,k1,k2,k3,k4,k5=self.vars
+        y10,k1,k2,k3,k4,k5=1.25,1.5,1.8,0.09,3,1
         delta = -psi_a*tanh(y1/y10)
         ddelta = -psi_a*(1-tanh(y1/y10)**2)*dy1/y10
         dpsi=ddelta+k2*sawtooth(delta-psi)
@@ -200,17 +244,67 @@ class PFController():
         # ddtheta_m=ddtheta_m_d+2*(dtheta_m_d-dtheta_m)+1*(theta_m_d-theta_m)
         # dbeta=-0.25*beta
         # dnu=(2-nu)
-        C=R3(beta)@np.array([dnu,nu*dbeta,0])
+        C=R(beta,'z')@np.array([dnu,nu*dbeta,0])
         w=np.flip(self.full_state[6:9])
         # k=0.07
         wd=k3*np.tanh(C/k5)
         D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
         wd=D@wd
         u=k4*(wd-w)
-        from time import time
-        self.displayer.data_to_plotx.append(time())
-        # self.displayer.data_to_ploty1.append(s1)
-        self.displayer.data_to_ploty2.append(y1)
+        # self.displayer.data_to_plotx.append(time())
+        # self.displayer.data_to_ploty1.append(self.imu_data[-1])
+        # self.displayer.data_to_ploty1.append(self.full_state[7])
+        # self.displayer.data_to_ploty2.append(self.full_state[8])
+        return u
+
+    def LPF_control_3D(self):
+        X = self.full_state[0:3]
+        Vr = self.full_state[3:6]
+        s = self.s
+        theta_m, dtheta_m = self.full_state[6],self.full_state[9]
+        Rm=np.zeros((3,3))
+        
+        u, v,w = Vr
+        nu = np.linalg.norm(Vr)
+        beta=np.arctan2(v,u)
+        gamma=np.arcsin(w/v)
+        Rs=R(beta,'z')@R(gamma,'y')
+
+        
+        F=self.path_to_follow.local_info(s)
+        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
+        theta_c = F.psi
+        s1, y1, w1 = Rpsi.T@(X-F.X)
+        Rtheta = Rpath.T@Rm
+        Rpsi=Rtheta@Rs
+
+        ks = 0.7
+        ds = (Rpsi@Vr).T[:,0]+ks*s1
+        self.ds=ds
+
+        dtheta_c = F.C*ds
+        ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1,0])
+
+        psi_a=1.3
+        y10,k1,k2,k3,k4,k5=1.25,1.5,1.8,0.09,3,1
+
+
+        e=np.array([s1,y1,w1])
+        cross_e=np.cross(e,s1)
+        cross_e=cross_e/np.linalg.norm(cross_e)
+        delta=-psi_a*tanh(cross_e)
+        Rdelta=
+
+        nu_d=1
+        dnu=k1*(nu_d-nu)
+
+        C=R(beta,'z')@np.array([dnu,nu*dbeta,0])
+        
+        w=np.flip(self.full_state[6:9])
+        wd=k3*np.tanh(C/k5)
+        D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
+        wd=D@wd
+        u=k4*(wd-w)
         return u
 
 
