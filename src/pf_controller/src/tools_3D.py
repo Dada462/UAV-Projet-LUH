@@ -23,7 +23,7 @@ def sawtooth(x):
 
 
 class pathInfo():
-    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None):
+    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None,dR=None):
         self.s=s
         self.C=C
         self.dC=dC
@@ -32,8 +32,9 @@ class pathInfo():
         self.y1=y1
         self.w1=w1
         self.X=X
+        self.dR=dR
 
-class Path():
+class Path_3D():
     def __init__(self,*args,**kwargs):
         if 'type' not in kwargs:
             raise ValueError('You must specity a type, either type=\'parametric\' or \'waypoints\'')
@@ -75,12 +76,19 @@ class Path():
         C=norm(d2f_ds/ds,axis=0)
         dC=np.gradient(C)/ds
         psi=np.arctan2(df[1],df[0])
+        
         s1=df/ds
         y1=np.gradient(s1,axis=1)
         y1=y1/norm(y1,axis=0)
         w1=np.cross(s1.T,y1.T).T
-        # Rpsi=np.vstack((s1,y1,w1)).T
         
+        ds1=np.gradient(s1,axis=1)/ds
+        dy1=np.gradient(y1,axis=1)/ds
+        dw1=np.gradient(w1,axis=1)/ds
+        
+        dR=np.stack((ds1.T,dy1.T,dw1.T),axis=1)
+        dR=np.transpose(dR,axes=(0,2,1))
+
         self.s=s
         s_to_psi=interpolate.interp1d(s, psi)
         s_to_XYZ=interpolate.interp1d(s, points)
@@ -89,6 +97,7 @@ class Path():
         s_to_s1=interpolate.interp1d(s, s1)
         s_to_y1=interpolate.interp1d(s, y1)
         s_to_w1=interpolate.interp1d(s, w1)
+        s_to_dsyw=interpolate.interp1d(s, dR,axis=0)
 
         self.s_to_C=s_to_C
         self.s_to_dC=s_to_dC
@@ -97,6 +106,7 @@ class Path():
         self.s_to_s1=s_to_s1
         self.s_to_y1=s_to_y1
         self.s_to_w1=s_to_w1
+        self.s_to_dsyw=s_to_dsyw
     
     def local_info(self,s):
         s=np.clip(s,0,self.s_max)
@@ -107,7 +117,8 @@ class Path():
         s1=self.s_to_s1(s)
         y1=self.s_to_y1(s)
         w1=self.s_to_w1(s)
-        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1)
+        s_to_dsyw=self.s_to_dsyw(s)
+        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1, s_to_dsyw)
         return local_property
 
 
@@ -117,13 +128,14 @@ if __name__=='__main__':
     def f(t):
         x = np.cos(t)
         y = np.sin(3*t)
-        return np.array([x,y])
+        z=0*t
+        return np.array([x,y,z])
 
     points=f(np.linspace(-10,10, 5000))
     X,Y,Z=points
     # p=Path(points,type='waypoints')
     # p=Path(f,[-10,10],type='parametric')
-    p=Path(lambda t : 5*np.array([cos(t),sin(0.9*t)]),[-10,10],type='parametric')
+    p=Path_3D(lambda t : 5*np.array([cos(t),sin(0.9*t),0*t]),[-10,10],type='parametric')
 
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
 
