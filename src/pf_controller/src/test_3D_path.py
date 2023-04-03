@@ -10,8 +10,8 @@ from scipy.linalg import expm,logm
 
 
 
-# import pyqtgraph.examples
-# pyqtgraph.examples.run()
+import pyqtgraph.examples
+pyqtgraph.examples.run()
 
 def state(X,u):
     return u
@@ -25,7 +25,6 @@ w = gl.GLViewWidget()
 w.show()
 w.setWindowTitle('pyqtgraph example: GLLinePlotItem')
 w.setCameraPosition(distance=40)
-
 gx = gl.GLGridItem()
 gx.rotate(90, 0, 1, 0)
 gx.translate(-10, 0, 0)
@@ -41,14 +40,8 @@ w.addItem(gz)
 def f(t):
     x = 5*np.cos(t)
     y = 5*np.sin(0.9*t)
-    z=t
+    z=15+t
     return np.array([x,y,z])
-
-# def f(t):
-#     x = t**2
-#     y = t
-#     z=t
-#     return np.array([x,y,z])
 
 p=Path_3D(f,[-10,10],type='parametric')
 F=p.local_info(p.s)
@@ -71,7 +64,6 @@ s1_arrow = gl.GLLinePlotItem(width=3, color=(0, 0, 1, 0.8))
 y1_arrow = gl.GLLinePlotItem(width=3, color=(0, 1, 0, 0.8))
 w1_arrow = gl.GLLinePlotItem(width=3, color=(1, 0.5, 0.5, 0.8))
 
-# add the arrow item to the view
 w.addItem(s1_arrow)
 w.addItem(y1_arrow)
 w.addItem(w1_arrow)
@@ -107,7 +99,6 @@ def controller(state):
     Vr=Rs@np.array([nu,0,0])
 
     ks=3
-    # ds = (Rpsi@Vr)[0]+ks*s1
     ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
 
     dX=np.array([*Vr,ds])

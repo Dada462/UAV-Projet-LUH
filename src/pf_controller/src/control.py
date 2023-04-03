@@ -4,12 +4,10 @@ import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stamped,Quaternion
 from mavros_msgs.msg import PositionTarget,AttitudeTarget
-from sensor_msgs.msg import Imu
 from numpy import cos, sin, tanh, pi
 import threading
-from tools_optimized import Path,sawtooth
-from tools_3D import Path_3D,R
-from MissionDisplayer import MainWindow
+from tools_3D import Path_3D,R,sawtooth
+from MissionDisplayer3D import MainWindow
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import sys
 from scipy.spatial.transform import Rotation
@@ -26,8 +24,7 @@ class PFController():
     def __init__(self):
         rospy.init_node('pf_controller', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
-        # rospy.Subscriber('/mavros/imu/data', Imu, self.imu_test)
-        self.state=np.zeros(6)
+        self.state=np.zeros(12)
         self.init_path()
         
         app = QtWidgets.QApplication(sys.argv)
@@ -37,15 +34,6 @@ class PFController():
         ros_thread.start()
 
         sys.exit(app.exec_())
-    
-    # def imu_test(self,data):
-    #     z=data.linear_acceleration.z
-    #     # self.imu_data.append(z)
-    #     try:
-    #         self.displayer.data_to_plotx.append(time())
-    #         self.displayer.data_to_ploty1.append(z-9.81)
-    #     except:
-    #         pass
     
     def adj(self,w):
         return np.array([[0,-w[2],w[1]] , [w[2],0,-w[0]] , [-w[1],w[0],0]])
@@ -63,19 +51,16 @@ class PFController():
         i=0
         self.PID=PID()
         while not rospy.is_shutdown():
-            # s_pos=path_info_update(self.path_to_follow, self.s).X.reshape((2,1))
-            s_pos=self.path_to_follow.local_info(self.s).X.reshape((2,1))
+            s_pos=self.path_to_follow.local_info(self.s).X
             self.displayer.update_state(self.state,s_pos)
-            # u=self.LPF_control_kin(self.state)
-            u=self.LPF_control_dyn()
-            # self.LPF_control_3D()
-            # u=4*np.tanh(u)
+            u=self.PLF_3D_Kin()
+
             if self.displayer.mission_state['start']:
                 # Kin Lyapunov PF
-                # command=TwistStamped()
-                # command.twist.linear=Vector3(u[0],u[1],0.)
-                # command.twist.angular=Vector3(0.,0.,u[-1])
-                # command_pub.publish(command)
+                command=TwistStamped()
+                command.twist.linear=Vector3(*u)
+                command.twist.angular=Vector3(0.,0.,0)
+                command_pub.publish(command)
                 
 
                 # Dyn Lyapunov PF
@@ -87,11 +72,11 @@ class PFController():
                 # command.yaw=u[2]
                 # accel_command_pub.publish(command)
                 
-                msg = AttitudeTarget()
-                msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                msg.thrust=0.5
-                msg.body_rate=Vector3(*u)
-                attitude_pub.publish(msg)
+                # msg = AttitudeTarget()
+                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # msg.thrust=0.5
+                # msg.body_rate=Vector3(*u)
+                # attitude_pub.publish(msg)
 
 
                 # # Speed control
@@ -124,7 +109,7 @@ class PFController():
                 msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
                 
                 msg.thrust=0.5
-                w=self.full_state[6:9]
+                w=self.state[6:9]
                 w[2]=0
                 msg.body_rate=Vector3(*2*(u-w)[:2],0)
                 attitude_pub.publish(msg)
@@ -138,32 +123,28 @@ class PFController():
             rate.sleep()
     
     def init_path(self):
-
         # self.path_to_follow=Path(lambda t : 5*np.array([cos(t),sin(2*t)]),[0,15],type='parametric')
-        self.path_to_follow=Path(lambda t : 5*np.array([cos(t),sin(0.9*t)]),[-10,10],type='parametric')
+        # self.path_to_follow=Path(lambda t : 5*np.array([cos(t),sin(0.9*t)]),[-10,10],type='parametric')
         # self.path_to_follow=Path(lambda t : 10*np.array([cos(t),sin(t)]),[-10,10],type='parametric')
         # self.path_to_follow=Path(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t)]),[-10,10],type='parametric')
         # self.path_to_follow=Path(lambda t : np.array([t,-10+t*0]),[-20,20],type='parametric')
+        self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(t),3*(t+10)+2]),[-10,10],type='parametric')
         
-        # self.path_3D=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),t+20]),[-10,10],type='parametric')
         self.s=0
         self.vars=10,1,1
     
     def update_state(self,data):
         speed=data.data[3:6]
-        r = Rotation.from_euler('xyz', data.data[6:9],degrees=False)
-        r2=Rotation.from_euler('xyz',[0,0,-data.data[9]],degrees=False)
+        r = Rotation.from_euler('XYZ', data.data[6:9],degrees=False)
+        r2=Rotation.from_euler('XYZ',[0,0,-data.data[9]],degrees=False)
         speed=r.apply(speed)
         speed=r2.apply(speed)
-        # print('speed',np.round(speed,2))
-        self.state=np.array([*data.data])[[0,1,3,4,6,11]]
-        self.state[2:4]=speed[0:2]
-        self.full_state=np.array([*data.data])
-        self.full_state[3:6]=speed
+        self.state=np.array([*data.data])
+        self.state[3:6]=speed
     
     def speed_control(self):
-        V=self.full_state[3:6]
-        w=self.full_state[6:9]
+        V=self.state[3:6]
+        w=self.state[6:9]
         Vd=np.array([0.3,0,0])
         k=0.2
         wd=k*np.tanh(Vd-V)
@@ -200,10 +181,10 @@ class PFController():
         return np.array([u,v,0])
     
     def LPF_control_dyn(self):
-        X = self.full_state[0:2]
-        Vt = self.full_state[3:5]
+        X = self.state[0:2]
+        Vt = self.state[3:5]
         s = self.s
-        theta_m, dtheta_m = self.full_state[8],self.full_state[11]
+        theta_m, dtheta_m = self.state[8],self.state[11]
         u, v = Vt
         nu = np.linalg.norm(Vt)
         beta=np.arctan2(v,u)
@@ -241,7 +222,7 @@ class PFController():
         # dbeta=-0.25*beta
         # dnu=(2-nu)
         C=R(beta,'z')@np.array([dnu,nu*dbeta,0])
-        w=self.full_state[6:9]
+        w=self.state[6:9]
         # k=0.07
         wd=k3*np.tanh(C/k5)
         # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
@@ -250,19 +231,46 @@ class PFController():
         u=k4*(wd-w)
         # self.displayer.data_to_plotx.append(time())
         # self.displayer.data_to_ploty1.append(self.imu_data[-1])
-        # self.displayer.data_to_ploty1.append(self.full_state[7])
-        # self.displayer.data_to_ploty2.append(self.full_state[8])
+        # self.displayer.data_to_ploty1.append(self.state[7])
+        # self.displayer.data_to_ploty2.append(self.state[8])
         return u
 
+    def PLF_3D_Kin(self):
+        X = self.state[:3]
+        s=self.s
+
+        F=self.path_to_follow.local_info(s)
+        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
+        s1, y1, w1 = Rpath.T@(X-F.X)
+        
+        
+        psi_a=pi/2
+        e=np.array([s1,y1,w1])
+        cross_e=np.cross(np.array([1,0,0]),e)
+        k_delta=0.5
+        delta=-psi_a*np.tanh(k_delta*cross_e)
+        Rpsi=expm(self.adj(delta))
+        Rs=Rpath@Rpsi
+        nu=1
+        Vr=Rs@np.array([nu,0,0])
+
+        ks=3
+        ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
+        self.ds=ds
+
+        dX=Vr
+    
+        return dX
+    
     def LPF_control_3D(self):
-        X = self.full_state[0:3]
-        Vr = self.full_state[3:6]
+        X = self.state[0:3]
+        Vr = self.state[3:6]
         s = self.s
-        phi,theta,psi=self.full_state[6:9]
-        wr=self.full_state[9:12]
+        phi,theta,psi=self.state[6:9]
+        wr=self.state[9:12]
         # wr=np.flip(wr)
 
-        Rm=Rotation.from_euler('xyz',angles=[self.full_state[6:9]])
+        Rm=Rotation.from_euler('xyz',angles=[self.state[6:9]])
         dRm=Rm.T@self.adj(wr)
         
         u, v, w = Vr
@@ -319,7 +327,7 @@ class PFController():
         dVr=dRs@np.array([nu,0,0])+Rs@np.array([dnu,0,0])
         print(dVr)
 
-        w=np.flip(self.full_state[6:9])
+        w=np.flip(self.state[6:9])
         wd=k3*np.tanh(dVr/k5)
         D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
         wd=D@wd

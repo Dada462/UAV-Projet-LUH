@@ -47,7 +47,7 @@ class RobotState():
         r=Rotation.from_quat(q)
         # _,_,theta=self.quaternion_to_euler(q)
         self.state[:3]=position
-        self.state[6:9]=r.as_euler('xyz')
+        self.state[6:9]=r.as_euler('XYZ')
 
     def robot_state_pub(self):
         pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
