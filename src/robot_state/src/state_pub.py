@@ -51,7 +51,7 @@ class RobotState():
 
     def robot_state_pub(self):
         pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
-        rate = rospy.Rate(20)
+        rate = rospy.Rate(30)
         while not rospy.is_shutdown():
             data=Float32MultiArray()
             data.data=self.state

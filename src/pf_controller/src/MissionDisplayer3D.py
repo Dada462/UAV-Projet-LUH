@@ -81,7 +81,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         
         self.w.setBackgroundColor('w')
-        self.w.setCameraPosition(distance=10)
+        self.w.setCameraPosition(distance=20)
         axis=gl.GLAxisItem(glOptions='opaque')
         axis.setSize(15,15,15)
         gx = gl.GLGridItem(color=(0,0,0,40))
@@ -124,7 +124,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.robot_info_label_1.setFixedSize(75,50)
         self.robot_info_label_1.move(10,690)
 
-        self.mission_state={'start':False,'go_home':False,'keyboard':True}
+        self.mission_state={'start':False,'go_home':True,'keyboard':False}
         
         # Test data
         self.positions = np.zeros((10**4,12))

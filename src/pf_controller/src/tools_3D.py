@@ -23,7 +23,7 @@ def sawtooth(x):
 
 
 class pathInfo():
-    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None,dR=None):
+    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None,dR=None,Tr=None):
         self.s=s
         self.C=C
         self.dC=dC
@@ -33,6 +33,7 @@ class pathInfo():
         self.w1=w1
         self.X=X
         self.dR=dR
+        self.Tr=Tr
 
 class Path_3D():
     def __init__(self,*args,**kwargs):
@@ -68,10 +69,7 @@ class Path_3D():
         s=np.cumsum(ds)
         s=s-s[0]
         self.s_max=np.max(s)
-        # df=np.vstack((df,np.zeros_like(df[0])))
-        # d2f=np.gradient(df,axis=1)
-        # dt=(np.max(t)-np.min(t))*len(t)
-        # C=self.curvature(df.T/dt,d2f.T/(dt**2))
+
         d2f_ds=np.gradient(df/ds,axis=1)
         C=norm(d2f_ds/ds,axis=0)
         dC=np.gradient(C)/ds
@@ -79,15 +77,36 @@ class Path_3D():
         
         s1=df/ds
         y1=np.gradient(s1,axis=1)
-        y1=y1/norm(y1,axis=0)
-        w1=np.cross(s1.T,y1.T).T
+        y1=y1/(norm(y1,axis=0)+1e-6)
+        w1=np.cross(s1,y1,axis=0)
+
         
         ds1=np.gradient(s1,axis=1)/ds
         dy1=np.gradient(y1,axis=1)/ds
         dw1=np.gradient(w1,axis=1)/ds
+        # print(norm(s1,axis=0).all()==1.0)
         
-        dR=np.stack((ds1.T,dy1.T,dw1.T),axis=1)
-        dR=np.transpose(dR,axes=(0,2,1))
+        n=ds1.shape[1]
+        print(n)
+        dR=np.zeros((n,3,3))
+        for i in range(n):
+            dR[i]=np.array([ds1[:,i],dy1[:,i],dw1[:,i]]).T
+            # print(dR[i])
+            # print(ds1[:,i],dy1[:,i],dw1[:,i])
+
+        # dR=np.stack((ds1.T,dy1.T,dw1.T),axis=1)
+        # dR=np.transpose(dR,axes=(0,2,1))
+
+        R=np.stack((s1.T,y1.T,w1.T),axis=1)
+        R=np.transpose(dR,axes=(0,2,1))
+        # print(np.round(R[0]@dR[0],2))
+
+        Tr=-np.sum(dw1*y1,axis=0)
+        # Tr=np.sqrt(dw1[0]**2+dw1[1]**2+dw1[2]**2)
+        # Tr=norm(dw1,axis=0)
+        # pg.plot(s,Tr,pen={'color': '#186ff6', 'width': 2},background='w')
+        # pg.exec()
+        # print(dw1[:,0],s1[:,0])
 
         self.s=s
         s_to_psi=interpolate.interp1d(s, psi)
@@ -98,6 +117,7 @@ class Path_3D():
         s_to_y1=interpolate.interp1d(s, y1)
         s_to_w1=interpolate.interp1d(s, w1)
         s_to_dsyw=interpolate.interp1d(s, dR,axis=0)
+        s_to_Tr=interpolate.interp1d(s, Tr)
 
         self.s_to_C=s_to_C
         self.s_to_dC=s_to_dC
@@ -107,6 +127,7 @@ class Path_3D():
         self.s_to_y1=s_to_y1
         self.s_to_w1=s_to_w1
         self.s_to_dsyw=s_to_dsyw
+        self.s_to_Tr=s_to_Tr
     
     def local_info(self,s):
         s=np.clip(s,0,self.s_max)
@@ -118,7 +139,8 @@ class Path_3D():
         y1=self.s_to_y1(s)
         w1=self.s_to_w1(s)
         s_to_dsyw=self.s_to_dsyw(s)
-        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1, s_to_dsyw)
+        s_to_Tr=self.s_to_Tr(s)
+        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1,s_to_dsyw,s_to_Tr)
         return local_property
 
 
@@ -128,21 +150,25 @@ if __name__=='__main__':
     def f(t):
         x = np.cos(t)
         y = np.sin(3*t)
-        z=0*t
+        z=10*t
         return np.array([x,y,z])
 
     points=f(np.linspace(-10,10, 5000))
     X,Y,Z=points
     # p=Path(points,type='waypoints')
     # p=Path(f,[-10,10],type='parametric')
-    p=Path_3D(lambda t : 5*np.array([cos(t),sin(0.9*t),0*t]),[-10,10],type='parametric')
+    a=0.1
+    b=0.1
+    p=Path_3D(lambda t : np.array([a*cos(t),a*sin(t),b*t]),[0,10],type='parametric')
 
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
 
     F=p.local_info(p.s)
     # plot.plot(F.X[0],F.X[1],pen={'color': 'blue', 'width': 2})
-    plot.plot(F.s,F.C,pen={'color': 'green', 'width': 2})
-    
+    plot.plot(F.s,F.Tr,pen={'color': 'red', 'width': 2})
+    # plot.plot(F.s,-b*cos(F.s/np.sqrt(a**2+b**2))/np.sqrt(a**2+b**2),pen={'color': 'red', 'width': 2})
+    plot.plot(F.s,b/(a**2+b**2)*np.ones_like(F.s),pen={'color': 'green', 'width': 2})
+
 
     # path=mat_reading(f)
     # plot.plot(path.s,np.abs(path.C_c),pen={'color': 'green', 'width': 2})
