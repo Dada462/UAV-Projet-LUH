@@ -4,13 +4,16 @@ from std_msgs.msg import String,Float32MultiArray
 from geometry_msgs.msg import TwistStamped,PoseStamped
 import numpy as np
 from scipy.spatial.transform import Rotation
-
+from time import time
 class RobotState():
     def __init__(self):
         self.state=np.zeros(12)
         rospy.init_node('robot_state_listener', anonymous=True)
         rospy.Subscriber("/mavros/local_position/velocity_body", TwistStamped, self.body_velocity_info)
         rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_info)
+        self.pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
+        self.t0=time()
+        self.t1=time()
         self.robot_state_pub()
 
     def quaternion_to_euler(self,q):
@@ -40,6 +43,11 @@ class RobotState():
         lx,ly,lz=data.twist.angular.x,data.twist.angular.y,data.twist.angular.z
         self.state[3:6]=u,v,w
         self.state[9:12]=lx,ly,lz
+        data=Float32MultiArray()
+        data.data=self.state
+        print('vel',1000*(time()-self.t0))
+        self.t0=time()
+        self.pub.publish(data)
 
     def local_pose_info(self,data):
         q=data.pose.orientation.x,data.pose.orientation.y,data.pose.orientation.z,data.pose.orientation.w
@@ -48,14 +56,19 @@ class RobotState():
         # _,_,theta=self.quaternion_to_euler(q)
         self.state[:3]=position
         self.state[6:9]=r.as_euler('XYZ')
+        data=Float32MultiArray()
+        data.data=self.state
+        self.pub.publish(data)
+        print('pose',1000*(time()-self.t1))
+        self.t1=time()
 
     def robot_state_pub(self):
-        pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
+        # pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
         rate = rospy.Rate(30)
         while not rospy.is_shutdown():
-            data=Float32MultiArray()
-            data.data=self.state
-            pub.publish(data)
+            # data=Float32MultiArray()
+            # data.data=self.state
+            # pub.publish(data)
             rate.sleep()
 
 if __name__ == '__main__':

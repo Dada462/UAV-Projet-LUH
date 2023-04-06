@@ -121,8 +121,14 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
-        self.robot_info_label_1.setFixedSize(75,50)
-        self.robot_info_label_1.move(10,690)
+        self.robot_info_label_1.setFixedSize(75,65)
+        self.robot_info_label_1.move(10,670)
+
+        self.parameters_box = QLineEdit(self)
+        self.parameters_box.move(600, 0)
+        self.parameters_box.resize(150, 25)
+        # self.parameters_box.setText('0.1,2,0.5')
+        self.parameters_box.setText('0.6,1,3,2,1,0.25,4.5,0.9')
 
         self.mission_state={'start':False,'go_home':True,'keyboard':False}
         
@@ -178,6 +184,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for k in self.pressed_keys:
             if k in keys:
                 self.keyboard[keys[k]]=1
+            if k==Qt.Key_Return or k==Qt.Key_Enter:
+                self.clickMethod()
 
     def keyReleaseEvent(self, event):
         self.pressed_keys.discard(event.key())
@@ -201,7 +209,12 @@ class MainWindow(QtWidgets.QMainWindow):
     
     def update_plot_data(self):
         if self.state is not None:
-            self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n'.format(x=self.state[0],y=self.state[1],z=self.state[2]))
+            try:
+                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\ne={error:0.2f}'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error))
+            except:
+                pass
+                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n'.format(x=self.state[0],y=self.state[1],z=self.state[2]))
+
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices+self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter,:3])
             self.i +=1
@@ -234,7 +247,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def reset_mission_data(self):
         self.pfc.s=0
         self.positions=self.positions*0
-        self.pfc.PID.I=0
+        # self.pfc.PID.I=0
         self.data_to_plotx=[]
         self.data_to_ploty1=[]
         self.data_to_ploty2=[]

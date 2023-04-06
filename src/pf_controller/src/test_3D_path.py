@@ -42,12 +42,14 @@ gz.translate(0, 0, -10)
 w.addItem(gz)
 
 def f(t):
-    x = 3*np.cos(10*t)*(1+sin(t))/2
-    y = 3*np.sin(10*t)*(1+sin(t))/2
-    z=10+t
+    x = 10*np.cos(10*t)
+    y = 10*np.sin(10*t)-20
+    z=0*t
     return np.array([x,y,z])
 
 p=Path_3D(f,[-10,10],type='parametric')
+# p=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t**0.5),0*t]),[0,15],type='parametric')
+
 F=p.local_info(p.s)
 pts=F.X.T
 plt = gl.GLLinePlotItem(pos=pts, color='red', width=3, antialias=True)
@@ -57,6 +59,7 @@ robot_path=gl.GLLinePlotItem(color='navy', width=3, antialias=True)
 pos=np.zeros(3)
 X=np.zeros(13)
 X[-1]=0
+X[3:6]=0,7,0
 sp1 = gl.GLScatterPlotItem(pos=pos,size=0.5,color=(0.2,0.96,0.25,1), pxMode=False)
 robot = gl.GLScatterPlotItem(pos=X[:3],size=0.5,color=(0.5,0.96,0.25,1), pxMode=False)
 
@@ -152,7 +155,7 @@ def LPF_control_3D(state,F):
 
         ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
 
-        psi_a=pi/2.5
+        psi_a=1
 
 
 
@@ -162,19 +165,19 @@ def LPF_control_3D(state,F):
         cross_e=np.cross(np.array([1,0,0]),e)
         dcross_e=np.cross(np.array([1,0,0]),de)
 
-        Ke=1
+        Ke=2
         # delta=-psi_a*np.tanh(Ke*cross_e*nu)
         delta=-psi_a*np.tanh(Ke*cross_e)
         nu_d=1
-        k1=1
+        k1=5
         dnu=k1*(nu_d-nu)
         # ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e*nu)**2)*(dcross_e*nu+dnu*cross_e)
         ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e)**2)*dcross_e
         
         Rdelta=expm(adj(delta))
 
-        Kpsi=1
-        dRpsi=-Kpsi*logm(Rdelta@Rpsi.T).T@Rpsi+Rpsi@adj(Rdelta.T@ddelta)
+        Kpsi=3
+        dRpsi=-Kpsi*logm(Rdelta@Rpsi.T).T@Rpsi-Rpsi@adj(Rdelta.T@ddelta)
 
 
         

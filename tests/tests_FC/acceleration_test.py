@@ -2,12 +2,15 @@ import rospy
 import numpy as np
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3,Vector3Stamped,PoseStamped,Point,Quaternion
-from mavros_msgs.msg import AttitudeTarget
+from mavros_msgs.msg import AttitudeTarget,PositionTarget
 from scipy.spatial.transform import Rotation
 from scipy.signal import square
 
 rospy.init_node('test', anonymous=True)
 
+# s=PositionTarget.IGNORE_AFX+PositionTarget.IGNORE_AFY+PositionTarget.IGNORE_AFZ+PositionTarget.IGNORE_PX+PositionTarget.IGNORE_PY+PositionTarget.IGNORE_PZ
+# PositionTarget.coordinate_frame=PositionTarget.FRAME_BODY_NED
+# print(s)
 
 def position_callback(data):
     position=np.array([data.pose.position.x,data.pose.position.y,data.pose.position.z])

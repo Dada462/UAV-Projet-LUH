@@ -18,6 +18,22 @@ def R(theta, which='2D'):
                  [0, 0, 1]])
     return r
 
+def R_multi(theta, which='2D'):
+    if which == '2D':
+        r=np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
+    elif which == 'x':
+        r=np.array([[np.ones_like(theta), np.zeros_like(theta), np.zeros_like(theta)], [np.zeros_like(theta), cos(theta), -sin(theta)],
+                 [np.zeros_like(theta), sin(theta), cos(theta)]])
+    elif which == 'y':
+        r=np.array([[cos(theta), np.zeros_like(theta), -sin(theta)],
+                  [np.zeros_like(theta), np.ones_like(theta), np.zeros_like(theta)], [sin(theta), np.zeros_like(theta), cos(theta)]])
+    elif which == 'z':
+        r=np.array([[cos(theta),- sin(theta), np.zeros_like(theta)],
+                 [sin(theta), cos(theta), np.zeros_like(theta)],
+                 [np.zeros_like(theta), np.zeros_like(theta), np.ones_like(theta)]])
+    r=np.transpose(r.T,[0,2,1])
+    return r
+
 def sawtooth(x):
     return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))
 
@@ -87,18 +103,17 @@ class Path_3D():
         # print(norm(s1,axis=0).all()==1.0)
         
         n=ds1.shape[1]
-        print(n)
         dR=np.zeros((n,3,3))
-        for i in range(n):
-            dR[i]=np.array([ds1[:,i],dy1[:,i],dw1[:,i]]).T
+        # for i in range(n):
+        #     dR[i]=np.array([ds1[:,i],dy1[:,i],dw1[:,i]]).T
             # print(dR[i])
             # print(ds1[:,i],dy1[:,i],dw1[:,i])
 
-        # dR=np.stack((ds1.T,dy1.T,dw1.T),axis=1)
-        # dR=np.transpose(dR,axes=(0,2,1))
+        dR=np.stack((ds1.T,dy1.T,dw1.T),axis=1)
+        dR=np.transpose(dR,axes=(0,2,1))
 
-        R=np.stack((s1.T,y1.T,w1.T),axis=1)
-        R=np.transpose(dR,axes=(0,2,1))
+        # R=np.stack((s1.T,y1.T,w1.T),axis=1)
+        # R=np.transpose(dR,axes=(0,2,1))
         # print(np.round(R[0]@dR[0],2))
 
         Tr=-np.sum(dw1*y1,axis=0)
@@ -157,21 +172,29 @@ if __name__=='__main__':
     X,Y,Z=points
     # p=Path(points,type='waypoints')
     # p=Path(f,[-10,10],type='parametric')
-    a=0.1
-    b=0.1
-    p=Path_3D(lambda t : np.array([a*cos(t),a*sin(t),b*t]),[0,10],type='parametric')
+    # p=Path_3D(lambda t : np.array([a*cos(t),a*sin(t),b*t]),[0,10],type='parametric')
+    p=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),15+0*t]),[-10,10],type='parametric')
+    # p=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
+
+    # f=lambda t : R(0.5*t,'x')@np.array([5*cos(t),5*sin(0.9*t),0*t])+15
+    # points=[]
+    # for t in np.linspace(-10,10,4000):
+    #     points.append(f(t))
+    # points=np.array(points).T
+
+    # p=Path_3D(points,type='waypoints')
+    
+    # t=np.linspace(-10,10,10)
+    # print(R_multi(0.5*t,'x')@(np.array([t,0*t,0*t])).shape)
+
 
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
 
     F=p.local_info(p.s)
-    # plot.plot(F.X[0],F.X[1],pen={'color': 'blue', 'width': 2})
-    plot.plot(F.s,F.Tr,pen={'color': 'red', 'width': 2})
-    # plot.plot(F.s,-b*cos(F.s/np.sqrt(a**2+b**2))/np.sqrt(a**2+b**2),pen={'color': 'red', 'width': 2})
-    plot.plot(F.s,b/(a**2+b**2)*np.ones_like(F.s),pen={'color': 'green', 'width': 2})
+    plot.plot(F.s,F.C,pen={'color': 'blue', 'width': 2})
+    # plot.plot(F.s,F.psi,pen={'color': 'red', 'width': 2})
 
 
-    # path=mat_reading(f)
-    # plot.plot(path.s,np.abs(path.C_c),pen={'color': 'green', 'width': 2})
-    plot.showGrid(x=1,y=1)
+    plot.showGrid(x=True,y=True)
     plot.show()
     pg.exec()
