@@ -121,14 +121,14 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
-        self.robot_info_label_1.setFixedSize(75,65)
-        self.robot_info_label_1.move(10,670)
+        self.robot_info_label_1.setFixedSize(75,100)
+        self.robot_info_label_1.move(10,650)
 
         self.parameters_box = QLineEdit(self)
         self.parameters_box.move(600, 0)
         self.parameters_box.resize(150, 25)
         # self.parameters_box.setText('0.1,2,0.5')
-        self.parameters_box.setText('0.6,1,3,2,1,0.25,4.5,0.9')
+        self.parameters_box.setText('0.4,1,2.5,1,1.5')
 
         self.mission_state={'start':False,'go_home':True,'keyboard':False}
         
@@ -160,6 +160,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.point_to_follow = gl.GLScatterPlotItem(pos=2*np.ones(3),size=0.1,color=(52/255, 244/255, 76/255,1), pxMode=False)
             self.point_to_follow.setGLOptions('translucent')
             self.w.addItem(self.point_to_follow)
+        
+        params=['Ke','k1','Ks','ν']
+        default_values=list(np.load('params.npy'))
+        if len(default_values)!=len(params):
+            default_values=np.zeros(len(params))
+        self.nb_of_params=len(params)
+        self.params=params
+        self.values=default_values
+        self.create_params_boxes()
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(75)
@@ -177,6 +186,42 @@ class MainWindow(QtWidgets.QMainWindow):
         #     self.w.setYRange(*range)
         self.show()
     
+    def create_params_boxes(self):
+        self.buttons_add={}
+        self.buttons_sub={}
+        self.textBoxes={}
+        self.labels={}
+        b_off=[0,300]
+        textSize=40
+        
+        for i in range(self.nb_of_params):
+            self.buttons_add[i]=QPushButton(self)
+            self.buttons_add[i].setText('+')
+            self.buttons_add[i].setGeometry(QtCore.QRect(25+textSize+b_off[0],100+25*i+b_off[1],25,25))
+            self.buttons_add[i].clicked.connect(self.click_function(True,i))
+            self.buttons_sub[i]=QPushButton(self)
+            self.buttons_sub[i].setText('-')
+            self.buttons_sub[i].setGeometry(QtCore.QRect(50+textSize+b_off[0],100+25*i+b_off[1],25,25))
+            self.buttons_sub[i].clicked.connect(self.click_function(False,i))
+
+            self.labels[i]= QLabel(self)
+            self.labels[i].setStyleSheet("background-color: lightgreen; border: 1px solid black;")
+            self.labels[i].setText(self.params[i])
+            self.labels[i].setGeometry(QtCore.QRect(0+b_off[0],100+25*i+b_off[1],25,25))
+
+            self.textBoxes[i]=QLineEdit(self)
+            self.textBoxes[i].setText(str(self.values[i]))
+            self.textBoxes[i].setGeometry(QtCore.QRect(25+b_off[0],100+25*i+b_off[1],textSize,25))
+    
+    def click_function(self,add,id):
+        def click_method():
+            if add:
+                self.values[id]=self.values[id]+0.1
+            else:
+                self.values[id]=self.values[id]-0.1
+            self.textBoxes[id].setText(str(np.round(self.values[id],2)))
+        return click_method
+
     def keyPressEvent(self, event):
         self.pressed_keys.add(event.key())
         key_ids=[Qt.Key_Up,Qt.Key_Down,Qt.Key_Left,Qt.Key_Right,Qt.Key_G,Qt.Key_H]
@@ -186,6 +231,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.keyboard[keys[k]]=1
             if k==Qt.Key_Return or k==Qt.Key_Enter:
                 self.clickMethod()
+                self.update_values()
 
     def keyReleaseEvent(self, event):
         self.pressed_keys.discard(event.key())
@@ -205,12 +251,23 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pfc.vars=vars
         except:
             pass
-        print('Parameters: ', vars)
+        # print('Parameters: ', vars)
+    
+    def update_values(self):
+        for i in range(self.nb_of_params):
+            v=float(self.textBoxes[i].text())
+            try:
+                self.values[i]=v
+            except:
+                pass
+        np.save('params.npy',self.values)
+        print('Parameters enter: ', self.values)
     
     def update_plot_data(self):
         if self.state is not None:
             try:
-                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\ne={error:0.2f}'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error))
+                speed=np.linalg.norm(self.state[3:6])
+                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\ne={error:0.2f}\nv={speed:0.2f}'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error,speed=speed))
             except:
                 pass
                 self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n'.format(x=self.state[0],y=self.state[1],z=self.state[2]))

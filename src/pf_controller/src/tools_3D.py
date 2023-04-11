@@ -173,16 +173,16 @@ if __name__=='__main__':
     # p=Path(points,type='waypoints')
     # p=Path(f,[-10,10],type='parametric')
     # p=Path_3D(lambda t : np.array([a*cos(t),a*sin(t),b*t]),[0,10],type='parametric')
-    p=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),15+0*t]),[-10,10],type='parametric')
+    # p=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),15+0*t]),[-10,10],type='parametric')
     # p=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
 
-    # f=lambda t : R(0.5*t,'x')@np.array([5*cos(t),5*sin(0.9*t),0*t])+15
-    # points=[]
-    # for t in np.linspace(-10,10,4000):
-    #     points.append(f(t))
-    # points=np.array(points).T
+    f=lambda t : R(0.1*t,'x')@np.array([5*cos(t),5*sin(t),0*t])
+    points=[]
+    for t in np.linspace(-10,40,6000):
+        points.append(f(t))
+    points=np.array(points).T
 
-    # p=Path_3D(points,type='waypoints')
+    p=Path_3D(points,type='waypoints')
     
     # t=np.linspace(-10,10,10)
     # print(R_multi(0.5*t,'x')@(np.array([t,0*t,0*t])).shape)
@@ -191,7 +191,7 @@ if __name__=='__main__':
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
 
     F=p.local_info(p.s)
-    plot.plot(F.s,F.C,pen={'color': 'blue', 'width': 2})
+    plot.plot(F.s,F.Tr,pen={'color': 'blue', 'width': 2})
     # plot.plot(F.s,F.psi,pen={'color': 'red', 'width': 2})
 
 

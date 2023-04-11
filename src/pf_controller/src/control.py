@@ -64,7 +64,13 @@ class PFController():
         while not rospy.is_shutdown():
             s_pos=self.path_to_follow.local_info(self.s).X
             self.displayer.update_state(self.state,s_pos)
-            u=self.LPF_control_3D()
+            u=self.LPF_control_3D_v2()
+            # u=self.LPF_control_3D()
+            # u=self.LPF_control_kin()
+            if np.linalg.norm(self.state[:2],ord=np.inf)>100:
+                # print('Security fail')
+                self.displayer.mission_state['start']=False
+                self.displayer.mission_state['keyboard']=False
             if self.displayer.mission_state['start']:
                 ############################## Speed Topic ##############################
                 # command=TwistStamped()
@@ -76,23 +82,32 @@ class PFController():
 
 
                 ############################## Acceleration Topic ##############################
-                # command = PositionTarget()
-                # command.header.stamp=rospy.Time().now()
-                # command.coordinate_frame = PositionTarget.FRAME_BODY_NED
-                # command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
-                # # u=np.clip(u,-1,1)
-                # command.acceleration_or_force=Vector3(*u)
-                # accel_command_pub.publish(command)
+                command = PositionTarget()
+                command.header.stamp=rospy.Time().now()
+                command.coordinate_frame = PositionTarget.FRAME_BODY_NED
+                command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
+                command.acceleration_or_force=Vector3(*u)
+                try:
+                    accel_command_pub.publish(command)
+                except:
+                    command.acceleration_or_force=Vector3(0,0,0)
+                    accel_command_pub.publish(command)
+
                 ############################## Acceleration Topic ##############################
-                
+                    
                 
 
                 ############################## Attitude Topic ##############################
-                msg = AttitudeTarget()
-                msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                msg.body_rate=Vector3(*u)
-                msg.thrust=0.5
-                attitude_pub.publish(msg)
+                # msg = AttitudeTarget()
+                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # msg.body_rate=Vector3(*u[:2],0)
+                # try:
+                #     k,k1=self.vars[0]
+                # except:
+                #     k,k1=0.2,1
+                # ddz=k*np.tanh(k1*u[2])
+                # msg.thrust=0.5+ddz
+                # attitude_pub.publish(msg)
                 ############################## Attitude Topic ##############################
                 
                 
@@ -141,14 +156,14 @@ class PFController():
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
         
         ############################### Sphere Path ###############################
-        f=lambda t : R(0.1*t,'x')@np.array([5*cos(t),5*sin(t),0])+np.array([0,0,15])
+        f=lambda t : R(0.1*t,'x')@np.array([5*cos(t),5*sin(t),0*t])+np.array([0,0,25])
         points=[]
         for t in np.linspace(-10,20,4000):
             points.append(f(t))
         points=np.array(points).T
         self.path_to_follow=Path_3D(points,type='waypoints')
         ############################### Sphere Path ###############################
-        # self.path_to_follow=Path_3D(lambda t : 10*np.array([cos(t),sin(t),0*t]),[-10,10],type='parametric')
+        # self.path_to_follow=Path_3D(lambda t : np.array([10*cos(t),10*sin(t),0*t+10]),[-10,10],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t),0*t]),[-10,10],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([t,-10+t*0,0*t]),[-20,20],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(t),3*(t+10)+10]),[-10,10],type='parametric')
@@ -314,8 +329,10 @@ class PFController():
 
 
         ks = 2
-        ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
+        # ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
+        ds=0
         self.ds=ds
+
 
         ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
 
@@ -326,37 +343,89 @@ class PFController():
 
         cross_e=np.cross(np.array([1,0,0]),e)
         dcross_e=np.cross(np.array([1,0,0]),de)
-
         try:
-            Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=self.vars
+            # Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=self.vars # Attitude control
+            Ke,psi_a,Kpsi,knu,nu_d=self.vars  # Acceleration control
         except:
-            Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=0.6,1,3,2,1,0.25,4.5,0.9
+            # Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=0.6,1,2.5,3,1,0.25,4.5,0.9 # Attitude control
+            Ke,psi_a,Kpsi,knu,nu_d=0.4,1,2.5,1,1.5 # Acceleration control
+            # 0.4,1,2.5,1,1.5 # for nu=1.5
             print('it didnt work')
         # Ke=0.8
-        delta=-psi_a*np.tanh(Ke*cross_e*nu)
-        # delta=-psi_a*np.tanh(Ke*cross_e)
+        # delta=-psi_a*np.tanh(Ke*cross_e*nu)
+        delta=-psi_a*np.tanh(Ke*cross_e)
         # nu_d=1
         # knu=1
         dnu=knu*(nu_d-nu)
-        ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e*nu)**2)*(dcross_e*nu+dnu*cross_e)
-        # ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e)**2)*dcross_e
+        # ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e*nu)**2)*(dcross_e*nu+dnu*cross_e)
+        ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e)**2)*dcross_e
         Rdelta=expm(self.adj(delta))
 
         # Kpsi=2
-        dRpsi=-Kpsi*logm(Rdelta@Rpsi.T).T@Rpsi-Rpsi@self.adj(Rdelta.T@ddelta)
+        dRpsi=-Kpsi*logm(Rpsi@Rdelta.T)@Rpsi-Rpsi@self.adj(Rdelta.T@ddelta)
 
         dRs=Rtheta.T@(dRpsi-dRtheta@Rs)
         dVr=nu*dRs[:,0]+dnu*Rs[:,0]
-        dVr=dVr+self.adj(wr)@Vr
+        # dVr=dVr+self.adj(wr)@Vr
         u=dVr
+        # u=np.clip(u,-2,2)
         # k3,k4=0.07,2
-        w=self.state[6:9]
-        wd=k3*np.tanh(k5*dVr)
-        D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-        wd=D@wd
-        u=k4*(wd-w)
+        # w=self.state[6:9]
+        # wd=k3*np.tanh(k5*dVr)
+        # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
+        # wd=D@wd
+        # u=k4*(wd-w)
         return u
 
+    def LPF_control_3D_v2(self):
+        X = self.state[0:3]
+        Vr = self.state[3:6]
+        s = self.s
+        phi,theta,psi=self.state[6:9]
+        wr=self.state[9:12]
+
+        Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
+        dRm=Rm@self.adj(wr)
+        
+        F=self.path_to_follow.local_info(s)
+        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
+        dRpath=F.dR
+        
+        Rtheta = Rpath.T@Rm
+        dRtheta=dRpath.T@Rm+Rpath.T@dRm
+        s1, y1, w1 = Rpath.T@(X-F.X)
+        self.error=100*np.linalg.norm([s1,y1,w1],ord=np.inf)
+        ks = 5
+        ds = (Rtheta@Vr)[0]+ks*s1
+        if s<0.05 and ds < -1:
+            ds=0
+        self.ds=ds
+        ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
+
+        Ke,k1,K_s,nu_d=self.displayer.values
+        # Ke=3
+        # k1=3
+        # nu_d=1
+
+        # e=np.array([s1,y1,w1])
+        de=np.array([ds1,dy1,dw1])
+
+        e1=np.array([0,y1,w1])
+        de1=np.array([0,dy1,dw1])
+
+        # print('DE',de)
+        v_e=1
+        Vp=np.array([nu_d*(1-np.tanh(K_s*np.linalg.norm(e1))),-v_e*np.tanh(Ke*y1),-v_e*np.tanh(Ke*w1)])
+        dVp=-(1-np.tanh(np.array([np.linalg.norm(e1),Ke*y1,Ke*w1]))**2)*np.array([de1.T@e1,dy1,dw1])
+        D=np.diag((nu_d,v_e*Ke,v_e*Ke))
+        dVp=D@dVp
+        Vd=Rtheta.T@Vp
+        dVd=dRtheta.T@Vp+Rtheta.T@dVp
+        dVr=dVd+k1*(Vd-Vr)
+        # print('test',np.round(dVr,2),self.s,self.error,np.linalg.norm(de,ord=np.inf))
+        dVr=dVr+self.adj(wr)@Vr
+        dVr=2*np.tanh(dVr)
+        return dVr
 
 if __name__ == '__main__':
     try:
