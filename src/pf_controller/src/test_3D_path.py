@@ -16,17 +16,17 @@ pg.setConfigOptions(antialias=True)
 # pyqtgraph.examples.run()
 
 
-def state_function(state,u):
-    Vr=state[3:6]
-    dX=Vr
-    dVr=u[:3]
-    ds=u[3]
-    return np.hstack((dX,dVr,np.zeros(6),ds))
-
 # def state_function(state,u):
-#     dX=u[:3]
+#     Vr=state[3:6]
+#     dX=Vr
+#     dVr=u[:3]
 #     ds=u[3]
-#     return np.hstack((dX,np.zeros(9),ds))
+#     return np.hstack((dX,dVr,np.zeros(6),ds))
+
+def state_function(state,u):
+    dX=u[:3]
+    ds=u[3]
+    return np.hstack((dX,np.zeros(9),ds))
 
 def controller(state):
     X = state[:3]
@@ -167,7 +167,7 @@ def LPF_control_3D_kin_v2(state,F,params):
         Vp=np.array([nu_d*(1-np.tanh(np.abs(y1)+np.abs(w1))),-np.tanh(Ke*y1),-np.tanh(Ke*w1)])
         Vr=Rpath@Vp
         ds = (Vr@Rpath)[0]+ks*s1
-        return np.hstack((Vr,ds))
+        return np.hstack((Vr,ds)),0
 
 def LPF_control_3D_v2(state,F,params):
         X = state[0:3]
@@ -205,6 +205,7 @@ def LPF_control_3D_v2(state,F,params):
         Vd=Rtheta.T@Vp
         dVd=dRtheta.T@Vp+Rtheta.T@dVp
         dVr=dVd+k1*(Vd-Vr)
+        dVr=dVr+adj(wr)@Vr
         err=e
         return np.hstack((dVr,ds)),err
 
@@ -312,6 +313,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.show()
         self.timer = QtCore.QTimer()
         self.dt=0.01
+        self.tmax=15
         self.timer.setInterval(int(1000*self.dt))
         self.timer.timeout.connect(self.update_plot_data)
         self.simulate()
@@ -330,7 +332,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.values[i]=v
             except:
                 pass
-        np.save('params.npy',self.values)
+        np.save('params_lab.npy',self.values)
         print('Parameters: ', self.values)
     
         
@@ -356,14 +358,14 @@ class MainWindow(QtWidgets.QMainWindow):
         X[3:6]=V
         dt=self.dt
         self.r_pos=[[0,0,0]]
-        # for t in np.arange(0,15,dt):
-        # s1,y1,w1=self.update_plot_data()
-        # self.sp1.setData(pos=pos)
-        # self.robot_path.setData(pos=self.r_pos)
-        # self.s1_arrow.setData(pos=s1)
-        # self.y1_arrow.setData(pos=y1)
-        # self.w1_arrow.setData(pos=w1)
-        # self.robot.setData(pos=X[:3])
+        # for t in np.arange(0,self.tmax,dt):
+        s1,y1,w1=self.update_plot_data()
+        self.sp1.setData(pos=pos)
+        self.robot_path.setData(pos=self.r_pos)
+        self.s1_arrow.setData(pos=s1)
+        self.y1_arrow.setData(pos=y1)
+        self.w1_arrow.setData(pos=w1)
+        self.robot.setData(pos=X[:3])
 
     def update_plot_data(self):
         global X
@@ -378,7 +380,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # u=LPF_control_3D(X,F,self.values)
 
-        u,err=LPF_control_3D_v2(X,F,self.values)
+        u,err=LPF_control_3D_kin_v2(X,F,self.values)
         X[-1]=max(0,X[-1])
         err=np.linalg.norm(err)
         self.robot_info.setText('e={error:0.2f}'.format(error=err))
@@ -409,7 +411,7 @@ class MainWindow(QtWidgets.QMainWindow):
 #     points.append(f(t))
 # points=np.array(points).T
 # p=Path_3D(points,type='waypoints')
-p=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t**0.5),0*t]),[0,15],type='parametric')
+p=Path_3D(lambda t : np.array([0.1*t**2+1,5*sin(0.25*t**2),0*t]),[0,15],type='parametric')
 
 F=p.local_info(p.s)
 pts=F.X.T
@@ -425,9 +427,11 @@ X[-1]=0
 t=0
 
 app = pg.mkQApp()
-values=list(np.load('params.npy'))
+try:
+    values=list(np.load('params_lab.npy'))
+except:
+    values=np.array([1,1,1,1,1])
 window=MainWindow(pts,pos,X,['ψ','Ke','k1','Kψ','ν'],values,p)
-print('hiiii')
 
 
 from time import time

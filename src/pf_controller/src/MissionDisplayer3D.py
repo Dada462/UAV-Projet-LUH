@@ -161,7 +161,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.point_to_follow.setGLOptions('translucent')
             self.w.addItem(self.point_to_follow)
         
-        params=['Ke','k1','Ks','ν']
+        params=['Ke','k0','k1','Ks','Kth','ν']
         default_values=list(np.load('params.npy'))
         if len(default_values)!=len(params):
             default_values=np.zeros(len(params))
@@ -169,6 +169,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.params=params
         self.values=default_values
         self.create_params_boxes()
+        self.control_output = gl.GLLinePlotItem(width=3, color=(0, 0, 1, 1),glOptions='opaque')
+        self.w.addItem(self.control_output)
 
         self.timer = QtCore.QTimer()
         self.timer.setInterval(75)
@@ -275,6 +277,11 @@ class MainWindow(QtWidgets.QMainWindow):
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices+self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter,:3])
             self.i +=1
+            # t=self.i/20
+            # pos=np.array([0,0,5])
+            # dir=np.array([3*np.cos(t),3*np.sin(t),0])
+            # arrow=np.vstack((pos,pos+dir))
+            # self.control_output.setData(pos=arrow)
 
     def start_recording_mission(self):
         # Reinitialize the data
