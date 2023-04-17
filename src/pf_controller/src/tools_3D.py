@@ -39,7 +39,7 @@ def sawtooth(x):
 
 
 class pathInfo():
-    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None,dR=None,Tr=None):
+    def __init__(self,s=None,C=None,dC=None,psi=None,X=None,s1=None,y1=None,w1=None,dR=None,Tr=None,dTr=None):
         self.s=s
         self.C=C
         self.dC=dC
@@ -50,6 +50,7 @@ class pathInfo():
         self.X=X
         self.dR=dR
         self.Tr=Tr
+        self.dTr=dTr
 
 class Path_3D():
     def __init__(self,*args,**kwargs):
@@ -61,7 +62,7 @@ class Path_3D():
                 values_range=args[1]
             else:
                 values_range=[-10,10]
-            t = np.linspace(*values_range, 4000)
+            t = np.linspace(*values_range, 6000)
             points=f(t)
             self.points=points.T
         elif kwargs['type']=='waypoints':
@@ -89,7 +90,7 @@ class Path_3D():
         d2f_ds=np.gradient(df/ds,axis=1)
         C=norm(d2f_ds/ds,axis=0)
         dC=np.gradient(C)/ds
-        psi=np.arctan2(df[1],df[0])
+        # psi=np.arctan2(df[1],df[0])
         
         s1=df/ds
         y1=np.gradient(s1,axis=1)
@@ -117,6 +118,7 @@ class Path_3D():
         # print(np.round(R[0]@dR[0],2))
 
         Tr=-np.sum(dw1*y1,axis=0)
+        dTr=np.gradient(Tr)/ds
         # Tr=np.sqrt(dw1[0]**2+dw1[1]**2+dw1[2]**2)
         # Tr=norm(dw1,axis=0)
         # pg.plot(s,Tr,pen={'color': '#186ff6', 'width': 2},background='w')
@@ -124,7 +126,7 @@ class Path_3D():
         # print(dw1[:,0],s1[:,0])
 
         self.s=s
-        s_to_psi=interpolate.interp1d(s, psi)
+        # s_to_psi=interpolate.interp1d(s, psi)
         s_to_XYZ=interpolate.interp1d(s, points)
         s_to_C=interpolate.interp1d(s, C)
         s_to_dC=interpolate.interp1d(s, dC)
@@ -133,29 +135,48 @@ class Path_3D():
         s_to_w1=interpolate.interp1d(s, w1)
         s_to_dsyw=interpolate.interp1d(s, dR,axis=0)
         s_to_Tr=interpolate.interp1d(s, Tr)
+        s_to_dTr=interpolate.interp1d(s, dTr)
+
+       
 
         self.s_to_C=s_to_C
         self.s_to_dC=s_to_dC
-        self.s_to_psi=s_to_psi
+        # self.s_to_psi=s_to_psi
         self.s_to_XY=s_to_XYZ
         self.s_to_s1=s_to_s1
         self.s_to_y1=s_to_y1
         self.s_to_w1=s_to_w1
         self.s_to_dsyw=s_to_dsyw
         self.s_to_Tr=s_to_Tr
+        self.s_to_dTr=s_to_dTr
+        
+        
+        s_to_ds1=interpolate.interp1d(s, ds1)
+        s_to_dy1=interpolate.interp1d(s, dy1)
+        s_to_dw1=interpolate.interp1d(s, dw1)
+        self.s_to_ds1=s_to_ds1
+        self.s_to_dy1=s_to_dy1
+        self.s_to_dw1=s_to_dw1
+
     
     def local_info(self,s):
         s=np.clip(s,0,self.s_max)
         C=self.s_to_C(s)
         dC=self.s_to_dC(s)
-        psi=self.s_to_psi(s)
+        # psi=self.s_to_psi(s)
+        psi=None
         XYZ=self.s_to_XY(s)
         s1=self.s_to_s1(s)
         y1=self.s_to_y1(s)
         w1=self.s_to_w1(s)
         s_to_dsyw=self.s_to_dsyw(s)
         s_to_Tr=self.s_to_Tr(s)
-        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1,s_to_dsyw,s_to_Tr)
+        s_to_dTr=self.s_to_dTr(s)
+        local_property=pathInfo(s,C,dC,psi,XYZ,s1,y1,w1,s_to_dsyw,s_to_Tr,s_to_dTr)
+        
+        local_property.ds1=self.s_to_ds1(s)
+        local_property.dy1=self.s_to_dy1(s)
+        local_property.dw1=self.s_to_dw1(s)
         return local_property
 
 
@@ -168,14 +189,8 @@ if __name__=='__main__':
         z=10*t
         return np.array([x,y,z])
 
-    points=f(np.linspace(-10,10, 5000))
+    points=f(np.linspace(-10,10, 10000))
     X,Y,Z=points
-    # p=Path(points,type='waypoints')
-    # p=Path(f,[-10,10],type='parametric')
-    # p=Path_3D(lambda t : np.array([a*cos(t),a*sin(t),b*t]),[0,10],type='parametric')
-    # p=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),15+0*t]),[-10,10],type='parametric')
-    # p=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
-
     # f=lambda t : R(0.1*t,'x')@np.array([5*cos(t),5*sin(t),0*t])
     # points=[]
     # for t in np.linspace(-10,10,6000):
@@ -184,7 +199,9 @@ if __name__=='__main__':
     # p=Path_3D(points,type='waypoints')
     # p=Path_3D(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t),0*t+1]),[-10,10],type='parametric')
     # p=Path_3D(lambda t : np.array([t**2,-10+t,10+0*t]),[-20,20],type='parametric')
-    p=Path_3D(lambda t : np.array([t+7,2*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
+    # p=Path_3D(lambda t : np.array([cos(6*t),sin(6*t),6*t**2]),[0,10],type='parametric')
+    p=Path_3D(lambda t : np.array([t+5,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
+
     # p=Path_3D(lambda t : np.array([0.1*t**2+1,5*sin(0.25*t**2),0*t]),[0,15],type='parametric')
     
     # t=np.linspace(-10,10,10)
@@ -194,8 +211,9 @@ if __name__=='__main__':
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
 
     F=p.local_info(p.s)
-    plot.plot(F.s,F.C,pen={'color': 'blue', 'width': 2})
-    # plot.plot(F.s,F.psi,pen={'color': 'red', 'width': 2})
+    plot.plot(F.X[0],F.X[1],pen={'color': 'blue', 'width': 2})
+    plot.plot(F.s,0.2*F.C,pen={'color': 'red', 'width': 2})
+    # plot.plot(F.s,F.dTr,pen={'color': 'red', 'width': 2})
 
 
     plot.showGrid(x=True,y=True)

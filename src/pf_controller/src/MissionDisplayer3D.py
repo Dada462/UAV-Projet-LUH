@@ -69,16 +69,120 @@ class RobotMesh():
         r=Rotation.from_euler(seq=seq,angles=angles,degrees=deg).as_matrix()
         self.vertices=self.base_vertices@r.T
 
+
+class GLViewWidget_Modified(gl.GLViewWidget):
+    def __init__(self, parent=None, devicePixelRatio=None, rotationMethod='euler'):
+        super().__init__(parent, devicePixelRatio, rotationMethod)
+        self.pressed_keys = set()
+        self.keyboard=[0,0,0,0,0,0]
+    def evalKeyState(self):
+        pass
+    
+    def keyPressEvent(self, event):
+        self.pressed_keys.add(event.key())
+        key_ids=[Qt.Key_Up,Qt.Key_Down,Qt.Key_Left,Qt.Key_Right,Qt.Key_G,Qt.Key_H]
+        keys={key_ids[i]:i for i in range(len(key_ids))}
+        for k in self.pressed_keys:
+            if k in keys:
+                self.keyboard[keys[k]]=1
+            if k==Qt.Key_Return or k==Qt.Key_Enter:
+                self.clickMethod()
+                self.update_values()
+
+    def keyReleaseEvent(self, event):
+        self.pressed_keys.discard(event.key())
+        key_ids=[Qt.Key_Up,Qt.Key_Down,Qt.Key_Left,Qt.Key_Right,Qt.Key_G,Qt.Key_H]
+        keys={key_ids[i]:i for i in range(len(key_ids))}
+        if event.key() in keys:
+            self.keyboard[keys[event.key()]]=0
+
+class plot2D(QtWidgets.QMainWindow):
+    def __init__(self,PF_controller=None, *args, **kwargs):
+        super(plot2D, self).__init__(*args, **kwargs)
+
+        self.graphWidget = pg.GraphicsLayoutWidget()
+        self.graphWidget.setBackground('w')
+        self.setCentralWidget(self.graphWidget)
+        self.resize(650, 550)
+        self.setWindowTitle('Plot Window')
+        
+        # Buttons
+        start_mission = QPushButton(self.graphWidget)
+
+        start_mission.setText('Test button')
+
+        start_mission.setGeometry(QtCore.QRect(0,0,100,25))
+
+        # start_mission.clicked.connect(self.start_recording_mission)
+
+        
+        # Test data
+        self.positions = np.zeros((10**4,6))
+        self.positions_times=np.zeros(10**4)-1
+        self.pos_counter=0
+        self.state=None
+        self.pfc=PF_controller
+
+        # Creating the widgets
+        self.p = self.graphWidget.addPlot(col=0,row=0)
+        self.data_plot={0:pg.PlotCurveItem(pen=({'color': '#f12828', 'width': 3}), skipFiniteCheck=True,name='0')}
+        self.N=3000
+        self.values={0:np.zeros((self.N,2))}
+        self.cursors={0:0}
+        self.p.addItem(self.data_plot[0])
+
+        # Setting the plot
+        # self.p.setLabel('left', 'y', **{'color': 'r', 'font-size': '20px'})
+        self.p.setLabel('bottom', 't (s)', **{'color': 'r', 'font-size': '20px'})
+        self.p.addLegend()
+        self.p.showGrid(x=True, y=True)
+        self.p.setTitle("Plot", color="k", size="20px")
+
+        self.i = 0
+        
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(75)
+        self.timer.timeout.connect(self.update_plot_data)
+        self.timer.start()
+        self.show()
+    
+    def plot(self,x,y,id=0):
+        if not id in self.data_plot:
+            if id==1:
+                print('hi')
+                self.data_plot[id]=pg.PlotCurveItem(pen=({'color': '#186ff6', 'width': 3}), skipFiniteCheck=True,name=str(id))
+            elif id==2:
+                self.data_plot[id]=pg.PlotCurveItem(pen=({'color': '#3df618', 'width': 3}), skipFiniteCheck=True,name=str(id))
+                print('hi 2')
+            else:
+                self.data_plot[id]=pg.PlotCurveItem(pen=({'color': 'navy', 'width': 3}), skipFiniteCheck=True,name=str(id))
+            self.p.addItem(self.data_plot[id])
+            self.values[id]=np.zeros((self.N,2))
+            self.cursors[id]=0
+        if type(x)==np.float64 or type(x)==float or type(y)==np.float64 or type(y)==float:
+            self.values[id][self.cursors[id]]=x,y
+            values=self.values[id][:self.cursors[id]]
+            self.data_plot[id].setData(x=values[:,0],y=values[:,1])
+            self.cursors[id]+=1
+        else:
+            self.data_plot[id].setData(x=x,y=y)
+        self.cursors[id]=self.cursors[id]%self.N
+    
+    def update_plot_data(self):
+        # T=np.linspace(-10,10,4000)
+        # for id in self.data_plot:
+            # self.data_plot[id].setData(x=T,y=np.cos(T-self.i*0.075))
+        self.i +=1
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self,PF_controller=None, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
 
-        self.w = gl.GLViewWidget()
+        self.w = GLViewWidget_Modified()
         self.setCentralWidget(self.w)
         self.resize(850, 750)
         self.move(500,150)
         self.setWindowTitle('Mission Displayer')
-
         
         self.w.setBackgroundColor('w')
         self.w.setCameraPosition(distance=20)
@@ -127,7 +231,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.parameters_box = QLineEdit(self)
         self.parameters_box.move(600, 0)
         self.parameters_box.resize(150, 25)
-        # self.parameters_box.setText('0.1,2,0.5')
         self.parameters_box.setText('0.4,1,2.5,1,1.5')
 
         self.mission_state={'start':False,'go_home':True,'keyboard':False}
@@ -161,7 +264,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.point_to_follow.setGLOptions('translucent')
             self.w.addItem(self.point_to_follow)
         
-        params=['Ke','k0','k1','Ks','Kth','ν']
+        params=['Ke','k0','k1','Ks','Kth','ν','Kc','νc']
         default_values=list(np.load('params.npy'))
         if len(default_values)!=len(params):
             default_values=np.zeros(len(params))
@@ -178,7 +281,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.timer.start()
         self.pressed_keys = set()
         self.keyboard=[0,0,0,0,0,0]
-
+        
+        
+        
+        self.s1_arrow = gl.GLLinePlotItem(width=3, color=(0, 0, 1, 0.8),glOptions='opaque')
+        self.y1_arrow = gl.GLLinePlotItem(width=3, color=(0, 1, 0, 0.8),glOptions='opaque')
+        self.w1_arrow = gl.GLLinePlotItem(width=3, color=(1, 0.5, 0.5, 0.8),glOptions='opaque')
+        
+        self.w.addItem(self.s1_arrow)
+        self.w.addItem(self.y1_arrow)
+        self.w.addItem(self.w1_arrow)
         # if __name__!='__main__':
         #     xrange=[np.min(self.pfc.path_to_follow.points[:,0]),np.max(self.pfc.path_to_follow.points[:,0])]
         #     yrange=[np.min(self.pfc.path_to_follow.points[:,1]),np.max(self.pfc.path_to_follow.points[:,1])]
@@ -268,7 +380,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def update_plot_data(self):
         if self.state is not None:
             try:
-                speed=np.linalg.norm(self.state[3:6])
+                # speed=np.linalg.norm(self.state[3:6])
+                speed=self.pfc.v1
                 self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\ne={error:0.2f}\nv={speed:0.2f}'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error,speed=speed))
             except:
                 pass
@@ -277,6 +390,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices+self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter,:3])
             self.i +=1
+            self.keyboard=self.w.keyboard
             # t=self.i/20
             # pos=np.array([0,0,5])
             # dir=np.array([3*np.cos(t),3*np.sin(t),0])
@@ -335,8 +449,16 @@ class MainWindow(QtWidgets.QMainWindow):
 if __name__=='__main__':
     ################################## Pyqt ##################################
     app = QtWidgets.QApplication(sys.argv)
-    main = MainWindow()
-    main.state=np.zeros(12)
-    main.update_plot_data()
+    main=plot2D()
+    T=np.linspace(-10,10,500)
+    main.plot(T,0.1*T**2,0)
+    # main.plot(T,np.sin(T),1)
+    T=np.linspace(0,10,500)
+    for t in T:
+        main.plot(t,np.sin(t),2)
+
+    # main = MainWindow()
+    # main.state=np.zeros(12)
+    # main.update_plot_data()
     sys.exit(app.exec_())
     ################################## Pyqt ##################################
