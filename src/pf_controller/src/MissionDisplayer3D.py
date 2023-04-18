@@ -291,13 +291,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(self.s1_arrow)
         self.w.addItem(self.y1_arrow)
         self.w.addItem(self.w1_arrow)
-        # if __name__!='__main__':
-        #     xrange=[np.min(self.pfc.path_to_follow.points[:,0]),np.max(self.pfc.path_to_follow.points[:,0])]
-        #     yrange=[np.min(self.pfc.path_to_follow.points[:,1]),np.max(self.pfc.path_to_follow.points[:,1])]
-        #     range=np.min([xrange[0],yrange[0]]),np.max([xrange[1],yrange[1]])
-        #     self.w.setCameraPosition()
-        #     self.w.setXRange(*range)
-        #     self.w.setYRange(*range)
         self.show()
     
     def create_params_boxes(self):
@@ -391,11 +384,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.trace.setData(pos=self.positions[:self.pos_counter,:3])
             self.i +=1
             self.keyboard=self.w.keyboard
-            # t=self.i/20
-            # pos=np.array([0,0,5])
-            # dir=np.array([3*np.cos(t),3*np.sin(t),0])
-            # arrow=np.vstack((pos,pos+dir))
-            # self.control_output.setData(pos=arrow)
 
     def start_recording_mission(self):
         # Reinitialize the data

@@ -90,7 +90,6 @@ class Path_3D():
         d2f_ds=np.gradient(df/ds,axis=1)
         C=norm(d2f_ds/ds,axis=0)
         dC=np.gradient(C)/ds
-        # psi=np.arctan2(df[1],df[0])
         
         s1=df/ds
         y1=np.gradient(s1,axis=1)
@@ -101,7 +100,6 @@ class Path_3D():
         ds1=np.gradient(s1,axis=1)/ds
         dy1=np.gradient(y1,axis=1)/ds
         dw1=np.gradient(w1,axis=1)/ds
-        # print(norm(s1,axis=0).all()==1.0)
         
         n=ds1.shape[1]
         dR=np.zeros((n,3,3))
@@ -119,14 +117,8 @@ class Path_3D():
 
         Tr=-np.sum(dw1*y1,axis=0)
         dTr=np.gradient(Tr)/ds
-        # Tr=np.sqrt(dw1[0]**2+dw1[1]**2+dw1[2]**2)
-        # Tr=norm(dw1,axis=0)
-        # pg.plot(s,Tr,pen={'color': '#186ff6', 'width': 2},background='w')
-        # pg.exec()
-        # print(dw1[:,0],s1[:,0])
 
         self.s=s
-        # s_to_psi=interpolate.interp1d(s, psi)
         s_to_XYZ=interpolate.interp1d(s, points)
         s_to_C=interpolate.interp1d(s, C)
         s_to_dC=interpolate.interp1d(s, dC)
@@ -141,7 +133,6 @@ class Path_3D():
 
         self.s_to_C=s_to_C
         self.s_to_dC=s_to_dC
-        # self.s_to_psi=s_to_psi
         self.s_to_XY=s_to_XYZ
         self.s_to_s1=s_to_s1
         self.s_to_y1=s_to_y1
@@ -163,7 +154,6 @@ class Path_3D():
         s=np.clip(s,0,self.s_max)
         C=self.s_to_C(s)
         dC=self.s_to_dC(s)
-        # psi=self.s_to_psi(s)
         psi=None
         XYZ=self.s_to_XY(s)
         s1=self.s_to_s1(s)
