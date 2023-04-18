@@ -225,7 +225,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
-        self.robot_info_label_1.setFixedSize(75,100)
+        self.robot_info_label_1.setFixedSize(100,100)
         self.robot_info_label_1.move(10,650)
 
         self.parameters_box = QLineEdit(self)
@@ -382,7 +382,7 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 # speed=np.linalg.norm(self.state[3:6])
                 speed=self.pfc.v1
-                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\ne={error:0.2f}\nv={speed:0.2f}'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error,speed=speed))
+                self.robot_info_label_1.setText('x={x:0.2f} m\ny={y:0.2f} m\nz={z:0.2f} m\ne={error:0.2f} cm\nv={speed:0.2f} m/s'.format(x=self.state[0],y=self.state[1],z=self.state[2],error=self.pfc.error,speed=speed))
             except:
                 pass
                 self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n'.format(x=self.state[0],y=self.state[1],z=self.state[2]))

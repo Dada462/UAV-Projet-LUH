@@ -166,18 +166,20 @@ class PFController():
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
         
         ############################### Sphere Path ###############################
-        # f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
+        f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
         # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
         # f=lambda t : R(t,'y')@np.array([5,0,0])+np.array([0,0,10])+np.array([0*t,sin(15*t),0*t])
-        # points=[]
-        # for t in np.linspace(-10,20,4000):
-        #     points.append(f(t))
-        # points=np.array(points).T
-        # self.path_to_follow=Path_3D(points,type='waypoints')
+        points=[]
+        for t in np.linspace(-10,20,4000):
+            points.append(f(t))
+        points=np.array(points).T
+        self.path_to_follow=Path_3D(points,type='waypoints')
         ############################### Sphere Path ###############################
-        # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/5)+5,0*t+10]),[-10,30],type='parametric')
+        # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
+        # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
+        # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/7)+5,2*cos(2*pi*t/3)+10]),[-10,30],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*(2+sin(10*t))*cos(t),5*(2+sin(10*t))*sin(t),0*t+10]),[-10,10],type='parametric')
-        self.path_to_follow=Path_3D(lambda t : np.array([t,-10+0.01*t**2,0.01*t+10]),[-20,20],type='parametric')
+        # self.path_to_follow=Path_3D(lambda t : np.array([t,-10+0.01*t**2,0.01*t+10]),[-20,20],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(t),3*(t+10)+10]),[-10,10],type='parametric')
         
         ################################ Real Robot ################################
