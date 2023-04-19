@@ -45,7 +45,7 @@ class RobotState():
         self.state[9:12]=lx,ly,lz
         data=Float32MultiArray()
         data.data=self.state
-        print('vel',1000*(time()-self.t0))
+        # print('vel',1000*(time()-self.t0))
         self.t0=time()
         self.pub.publish(data)
 
@@ -59,7 +59,7 @@ class RobotState():
         data=Float32MultiArray()
         data.data=self.state
         self.pub.publish(data)
-        print('pose',1000*(time()-self.t1))
+        # print('pose',1000*(time()-self.t1))
         self.t1=time()
 
     def robot_state_pub(self):

@@ -16,6 +16,7 @@ from scipy import signal
 import matplotlib.pyplot as plt
 from time import time
 from scipy.linalg import expm,logm
+from RobotStateMachine import RobotModeState
 
 class PID():
     def __init__(self):
@@ -30,6 +31,7 @@ class PFController():
         
         app = QtWidgets.QApplication(sys.argv)
         self.displayer=MainWindow(self)
+        self.sm=RobotModeState()
         # self.p=plot2D()
 
         ros_thread = threading.Thread(target=self.main,daemon=True)
@@ -52,10 +54,10 @@ class PFController():
     
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
-        accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
+        # accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
-        data_view=rospy.Publisher('/dataView', Vector3, queue_size=10)
+        # data_view=rospy.Publisher('/dataView', Vector3, queue_size=10)
 
         f=30
         rate = rospy.Rate(f)
@@ -119,19 +121,21 @@ class PFController():
                 # go_home_pub.publish(command)
                 ############################## Waypoint Topic ##############################
                 
+                self.sm.robotStateCallback(self.state[2])
+                self.sm(u)
                 
                 
                 ############################## Acceleration Topic ##############################
-                command = PositionTarget()
-                command.header.stamp=rospy.Time().now()
-                command.coordinate_frame = PositionTarget.FRAME_BODY_NED
-                command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
-                command.acceleration_or_force=Vector3(*u)
-                try:
-                    accel_command_pub.publish(command)
-                except:
-                    command.acceleration_or_force=Vector3(0,0,0)
-                    accel_command_pub.publish(command)
+                # command = PositionTarget()
+                # command.header.stamp=rospy.Time().now()
+                # command.coordinate_frame = PositionTarget.FRAME_BODY_NED
+                # command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
+                # command.acceleration_or_force=Vector3(*u)
+                # try:
+                #     accel_command_pub.publish(command)
+                # except:
+                #     command.acceleration_or_force=Vector3(0,0,0)
+                #     accel_command_pub.publish(command)
 
                 ############################## Acceleration Topic ##############################
             elif self.displayer.mission_state['keyboard']:
@@ -156,6 +160,7 @@ class PFController():
                 q=Rotation.from_euler('XYZ',[0,0,90],degrees=True).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
+                
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
             i+=1
