@@ -24,12 +24,13 @@ class PFController():
     def __init__(self):
         rospy.init_node('pf_controller', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
-        self.init_path()
         
         app = QtWidgets.QApplication(sys.argv)
         self.displayer=MainWindow(self)
         self.sm=RobotModeState()
         self.pathAction=ActionServer(self)
+        self.pathIsComputed=False
+        self.init_path()
         # self.p=plot2D()
 
         ros_thread = threading.Thread(target=self.main,daemon=True)
@@ -46,18 +47,22 @@ class PFController():
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
+        # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
-        # data_view=rospy.Publisher('/dataView', Vector3, queue_size=10)
         f=30
         rate = rospy.Rate(f)
         i=0
+        self.s=0
+        self.ds=0
         self.I=PID()
         self.displayer.clickMethod()
+        s_pos=np.zeros(3)
         while not rospy.is_shutdown():
-            s_pos=self.path_to_follow.local_info(self.s).X
+            if self.pathIsComputed:
+                s_pos=self.path_to_follow.local_info(self.s).X
+                self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             self.displayer.update_state(self.state,s_pos)
-            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' :
+            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.pathIsComputed:
                 u=self.LPF_control_3D_v3()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
@@ -73,8 +78,10 @@ class PFController():
                 q=Rotation.from_euler('XYZ',[0,0,90],degrees=True).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
+                self.s=self.ds=0
             elif self.sm.state=='HOVERING':
                 speed_pub.publish(TwistStamped())
+                self.s=self.ds=0
             
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
@@ -84,19 +91,23 @@ class PFController():
     def init_path(self,points=[]):
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
-        if points==-1:
-            self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
-            self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
-            return 0
+        # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
+        if len(points)!=0:
+            try:
+                self.path_to_follow=Path_3D(points,type='waypoints')
+                self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
+                self.pathIsComputed=True
+            except:
+                print('[ERROR] Path properties were not possible to compute [ERROR]')
         ############################### Sphere Path ###############################
-        f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
+        # f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
         # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
         # f=lambda t : R(t,'y')@np.array([5,0,0])+np.array([0,0,10])+np.array([0*t,sin(15*t),0*t])
-        points=[]
-        for t in np.linspace(-10,20,4000):
-            points.append(f(t))
-        points=np.array(points).T
-        self.path_to_follow=Path_3D(points,type='waypoints')
+        # points=[]
+        # for t in np.linspace(-10,20,4000):
+        #     points.append(f(t))
+        # points=np.array(points).T
+        # self.path_to_follow=Path_3D(points,type='waypoints')
         ############################### Sphere Path ###############################
        
         # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
@@ -299,13 +310,7 @@ class PFController():
         return dVr
     
     def update_state(self,data):
-        # speed=data.data[3:6]
-        # r = Rotation.from_euler('XYZ', data.data[6:9],degrees=False)
-        # r2=Rotation.from_euler('XYZ',[0,0,-data.data[9]],degrees=False)
-        # speed=r.apply(speed)
-        # speed=r2.apply(speed)
         self.state=np.array([*data.data])
-        # self.state[3:6]=speed
     
     def speed_control(self):
         V=self.state[3:6]
@@ -313,7 +318,6 @@ class PFController():
         Vd=np.array([0.3,0,0])
         k=0.2
         wd=k*np.tanh(Vd-V)
-        # print(wd)
         D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
         wd=D@wd
         return 2*(wd-w)

@@ -1,47 +1,28 @@
-#! /usr/bin/env python
-
 import rospy
-
-# Brings in the SimpleActionClient
 import actionlib
-
-# Brings in the messages used by the fibonacci action, including the
-# goal message and the result message.
-import actionlib_tutorials.msg
 from uavr_nav_msgs.msg import FollowPathAction,Path,FollowPathGoal
-from time import sleep
-# print(Path())
+from geometry_msgs.msg import Pose, Point,Quaternion
+import numpy as np
 
 def feedback_cb(msg):
     print('Feedback received:', msg)
 
-def fibonacci_client():
+def main():
     client = actionlib.SimpleActionClient('followPath', FollowPathAction)
     client.wait_for_server()
-    print('it worked')
-    goal = FollowPathGoal(path=Path())
-    # print(goal.poses)
-
-    # client.send_goal(goal,feedback_cb=feedback_cb)
-    # sleep(1)
-    client.cancel_goal()
-    # r=rospy.Rate(2)
-    # for i in range(5):
-    #     client.get_state()
-    #     r.sleep()
-    # client.send_goal(goal)
-    # client.wait_for_result()
-
-    # return client.get_result()  # A FibonacciResult
-
-def feedback_callback(self, msg):
-    print(msg)
+    print('Server Active')
+    print('Sending path')
+    p=Path()
+    f=lambda t : np.array([3*np.cos(t),3*np.sin(t),0*t+10])
+    for t in np.linspace(0,6,4000):
+        p.poses.append(Pose(Point(*f(t)),Quaternion()))
+    goal = FollowPathGoal(path=p)
+    client.send_goal(goal,feedback_cb=feedback_cb)
+    print('Path sent')
+    # client.cancel_goal()
+    client.wait_for_result()
+    print('The result is: ',client.get_result())  # A FibonacciResult
 
 if __name__ == '__main__':
-    try:
-        # Initializes a rospy node so that the SimpleActionClient can
-        # publish and subscribe over ROS.
-        rospy.init_node('fibonacci_client_py')
-        result = fibonacci_client()
-    except rospy.ROSInterruptException:
-        print("program interrupted before completion", file=sys.stderr)
+    rospy.init_node('pathClient')
+    result = main()

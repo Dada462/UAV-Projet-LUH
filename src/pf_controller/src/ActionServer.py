@@ -1,50 +1,69 @@
 import rospy
 import actionlib
-from uavr_nav_msgs.msg import FollowPathAction,FollowPathFeedback,FollowPathResult
+from uavr_nav_msgs.msg import FollowPathAction, FollowPathFeedback, FollowPathResult
 from std_msgs.msg import String
+from numpy import array, inf
 import threading
 
+
 class ActionServer():
-    def __init__(self,pfc=None):
-        self.feedback=FollowPathFeedback()
-        self.server= actionlib.SimpleActionServer('followPath', FollowPathAction, execute_cb=self.execute_cb)
-        self.user_input_pub=rospy.Publisher('/user_input', String, queue_size=10)
-        self.path=None
-        self.distance_to_goal=1
-        self.pfc=pfc
-        print('server started')
+    def __init__(self, pfc=None):
+        self.feedback = FollowPathFeedback()
+        self.result = FollowPathResult()
+        self.server = actionlib.SimpleActionServer(
+            'followPath', FollowPathAction, execute_cb=self.execute_cb)
+        self.user_input_pub = rospy.Publisher(
+            '/user_input', String, queue_size=10)
+        self.user_input = rospy.Subscriber(
+            '/user_input', String, self.userInputCallback)
+        self.userInput = 'FOLLOWPATH'
+        self.path = None
+        self.distance_to_goal = inf
+        self.pfc = pfc
         self.server.start()
 
-    def execute_cb(self,goal):
+    def userInputCallback(self, msg):
+        self.userInput = msg.data
+
+    def execute_cb(self, goal):
         print('Path received')
-        r = rospy.Rate(1)
-        self.path=goal.path
-        # points=[]
-        points=-1
-        # self.pfc.init_path(points)
-        pathInterrupted=False
-        while self.distance_to_goal>0.1 and not rospy.is_shutdown():
-            if pathInterrupted:
-                self.user_input_pub(String('HOVERING'))
+        r = rospy.Rate(10)
+        self.path = goal.path
+        poses = self.path.poses
+        points = []
+        for pose in poses:
+            points.append([pose.position.x, pose.position.y, pose.position.z])
+        points = array(points).T
+        while self.userInput != 'FOLLOWPATH' and not rospy.is_shutdown():
+            self.user_input_pub.publish(String('FOLLOWPATH'))
+            r.sleep()
+        self.pfc.init_path(points)
+        pathInterrupted = False
+        while self.distance_to_goal > 0.05 and not rospy.is_shutdown():
+            if self.server.is_preempt_requested() or self.userInput != 'FOLLOWPATH':
+                pathInterrupted = True
                 break
-            self.user_input_pub.publish(String('CONTROL'))
-            self.feedback.distance_to_goal=self.distance_to_goal
+            self.feedback.distance_to_goal = self.distance_to_goal
             self.server.publish_feedback(self.feedback)
             r.sleep()
+
+        self.result.distance_to_goal = self.distance_to_goal
         if pathInterrupted:
-            self.server.set_aborted()
-        else:
-            self.server.set_succeeded(FollowPathResult())
-        
+            print('[FAIL] Following the path was interrupted')
+            self.result.result = 1
+            self.server.set_aborted(self.result)
+
+        elif not pathInterrupted and not rospy.is_shutdown():
+            print('[SUCCES] The path was successfully followed')
+            self.result.result = 0
+            self.server.set_succeeded(self.result)
+        self.pfc.ds = 0
+        self.pfc.s = 0
+        while self.userInput != 'HOME' and not rospy.is_shutdown():
+            self.user_input_pub.publish(String('HOME'))
+            r.sleep()
+
 
 if __name__ == '__main__':
     rospy.init_node('test')
-    def test(s):
-        from time import sleep
-        s.distance_to_goal=10
-        while s.distance_to_goal>0:
-            s.distance_to_goal-=0.25
-            print(s.distance_to_goal)
-            sleep(0.1)
-    s=ActionServer()
-    # test(s)
+    s = ActionServer()
