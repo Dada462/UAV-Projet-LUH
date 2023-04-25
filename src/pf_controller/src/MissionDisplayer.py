@@ -12,8 +12,9 @@ from std_msgs.msg import Float64
 from PyQt5.QtCore import Qt
 import pyqtgraph.opengl as gl
 from scipy.spatial.transform import Rotation
-
+from std_msgs.msg import String
 pg.setConfigOptions(antialias=True)
+import rospy
 
 class RobotMesh():
     def __init__(self,size=np.eye(3)):
@@ -139,7 +140,6 @@ class plot2D(QtWidgets.QMainWindow):
         self.p.setTitle("Plot", color="k", size="20px")
 
         self.i = 0
-        
         self.timer = QtCore.QTimer()
         self.timer.setInterval(75)
         self.timer.timeout.connect(self.update_plot_data)
@@ -177,6 +177,8 @@ class plot2D(QtWidgets.QMainWindow):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self,PF_controller=None, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
+        if __name__!='__main__':
+            self.commands_sender=rospy.Publisher('/user_input',String,queue_size=10)
 
         self.w = GLViewWidget_Modified()
         self.setCentralWidget(self.w)
@@ -399,6 +401,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def start_recording_mission(self):
         # Reinitialize the data
+        self.commands_sender.publish('FOLLOWPATH')
         print('Mission started')
         self.mission_state['start']=True
         self.mission_state['keyboard']=False
@@ -407,6 +410,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def stop_recording_mission(self):
         # Stop recording and save the data
         print('Mission is over')
+        self.commands_sender.publish('HOME')
         
         # self.mission_results()
         now = datetime.now()

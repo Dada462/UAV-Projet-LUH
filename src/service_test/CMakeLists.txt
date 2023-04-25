@@ -4,6 +4,7 @@ project(service_test)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
+  uavr_nav_msgs
   message_generation
 )
 

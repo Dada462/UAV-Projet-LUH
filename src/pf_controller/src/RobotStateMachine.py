@@ -2,123 +2,140 @@
 
 from time import sleep
 import rospy
-from service_test.srv import test as AddTwoInts
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
 from mavros_msgs.msg import State, PositionTarget
-from std_msgs.msg import String
-from geometry_msgs.msg import Vector3,PoseStamped,Point
+from std_msgs.msg import String, Float32MultiArray
+from geometry_msgs.msg import Vector3, PoseStamped, Point
+import numpy as np
+import threading
 
 
-class RobotModeState(rospy.Subscriber):
+class RobotModeState():
     def __init__(self):
-        super().__init__("/mavros/state", State, self.setState)
-        global LANDED, LANDING, TAKEOFF, HOVERING, CONTROL, ARM, PILOT, STABILIZE, GUIDED, LAND, END
-        # States
-        LANDED, LANDING, TAKEOFF, HOVERING, CONTROL, ARM, PILOT, END = 'LANDED', 'LANDING', 'TAKEOFF', 'HOVERING', 'CONTROL', 'ARM', 'PILOT', 'END'
-        # Modes
-        STABILIZE, GUIDED, LAND = 'STABILIZE', 'GUIDED', 'LAND'
+        global INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING
+        global STABILIZE, GUIDED, LAND, LOITER
+        global HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, NOT_GUIDED
+        global INIT_LAND, INIT_FOLLOWPATH, INIT_HOVER
 
-        self.armed = False
+        # States
+        INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING = 'INIT', 'LANDED', 'HOVERING', 'CONTROL', 'PILOT', 'TAKEOFF', 'STOPPING', 'LANDING'
+        # Modes
+        STABILIZE, GUIDED, LAND, LOITER = 'STABILIZE', 'GUIDED', 'LAND', 'LOITER'
+        # User inputs
+        HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, NOT_GUIDED = 'HOVER', 'LAND', 'FOLLOWPATH', 'PILOT_TAKEOVER', 'NOT_GUIDED'
+        # Init inputs
+        INIT_LAND, INIT_FOLLOWPATH, INIT_HOVER = 'INIT_LAND', 'INIT_FOLLOWPATH', 'INIT_HOVER'
+
+        self.state = INIT
+        self.blockCommands = True
+        self.armed = None
         self.mode = None
-        self.state = None
         self.takeoff_alt = 1.5
-        self.altitude = 0
-        self.userInput = ''
+        self.altitude = -1
+        self.userInput = None
+        self.takeoffAccepted = False
+        self.landAccepted = False
+
+        rospy.Subscriber("/mavros/state", State, self.setState)
+        rospy.Subscriber('user_input', String, self.userInputCallback)
+        rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
         self.set_mode_srv = rospy.ServiceProxy('/mavros/set_mode', SetMode)
         self.arming_srv = rospy.ServiceProxy('/mavros/cmd/arming', CommandBool)
-        self.takeoff_srv = rospy.ServiceProxy('/mavros/cmd/takeoff', CommandTOL)
+        self.takeoff_srv = rospy.ServiceProxy(
+            '/mavros/cmd/takeoff', CommandTOL)
         self.land_srv = rospy.ServiceProxy('/mavros/cmd/land', CommandTOL)
-        self.getInfo_srv = rospy.ServiceProxy('/mavros/vehicle_info_get', VehicleInfoGet)
+        self.getInfo_srv = rospy.ServiceProxy(
+            '/mavros/vehicle_info_get', VehicleInfoGet)
 
-        rospy.Subscriber('user_input', String, self.userInputCallback)
-        self.command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        self.command = PositionTarget()
-        self.command.coordinate_frame = PositionTarget.FRAME_BODY_NED
-        self.command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
-        self.go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
-        
+        self.r = rospy.Publisher(
+            "/mavros/setpoint_position/local", PoseStamped, queue_size=10)
+        ros_thread = threading.Thread(target=self.main, daemon=True)
+        ros_thread.start()
 
     def userInputCallback(self, msg):
-        self.userInput = msg.data
-
-    def robotStateCallback(self, msg):
-        # self.altitude = msg.pose.position.z
-        self.altitude = msg
+        userInput = msg.data
+        self.userInput = userInput
+        if self.mode != LOITER:
+            if self.userInput == HOVER:
+                if self.state != HOVERING and self.state != TAKEOFF and self.state != LANDING:
+                    self.set_mode_srv(0, GUIDED)
+                    sleep(0.05)
+                    if not self.armed:
+                        self.arming_srv(True)
+                        sleep(0.05)
+                    resp = self.takeoff_srv(0, 0, 0, 0, self.takeoff_alt)
+                    self.takeoffAccepted = resp.success
+            elif self.userInput == LAND:
+                if self.state != TAKEOFF:
+                    self.set_mode_srv(0, LAND)
+                    resp = self.land_srv()
+                    self.landAccepted = resp.success
+                else:
+                    self.landAccepted = False
+            elif self.userInput == FOLLOWPATH:
+                pass
+        else:
+            pass
 
     def setState(self, msg):
         self.armed = msg.armed
         self.mode = msg.mode
-        # try:
-        if (self.userInput == TAKEOFF or self.userInput == '') and abs(self.altitude) > 0.5:
-            self.state = HOVERING
-        elif self.userInput == LAND or self.verifyAltitude(self.altitude):
-            if self.verifyAltitude(self.altitude):
-                self.state = LANDED
+
+    def main(self):
+        rate = rospy.Rate(15)
+        while not rospy.is_shutdown():
+            # print(self)
+            if self.altitude == -1:
+                go_on = False
             else:
-                self.state = LANDING
-        elif self.userInput == CONTROL:
-            self.state = CONTROL
+                go_on = True
+            if go_on:
+                if self.state == INIT:
+                    if abs(self.altitude) < 0.1:
+                        self.state = LANDED
+                    else:
+                        self.state = HOVERING
+                if self.mode == LOITER:
+                    self.state == PILOT
+                if self.state == PILOT:
+                    if self.userInput == LAND:
+                        pass
+                if self.state == LANDED:
+                    if self.userInput == HOVER:
+                        if self.mode == GUIDED and self.armed and self.takeoffAccepted:
+                            self.state = TAKEOFF
+                elif self.state == TAKEOFF:
+                    if abs(self.altitude-self.takeoff_alt) < 0.1:
+                        self.state = HOVERING
+                elif self.state == HOVERING:
+                    if self.userInput == LAND:
+                        if self.landAccepted and self.mode == LAND:
+                            self.state = LANDING
+                    elif self.userInput == FOLLOWPATH:
+                        self.state = CONTROL
+                elif self.state == LANDING:
+                    if abs(self.altitude) < 0.1:
+                        self.state = LANDED
+                elif self.state == CONTROL:
+                    if self.userInput == HOVER:
+                        self.state = STOPPING
+                    elif self.userInput == LAND:
+                        if self.landAccepted and self.mode == LAND:
+                            self.state = LANDING
+                elif self.state == STOPPING:
+                    if self.speed < 0.25:
+                        self.state = HOVERING
+            rate.sleep()
 
-        elif self.userInput == PILOT:
-            self.state = PILOT
-        # except:
-            # pass
+    def stateCallback(self, msg):
+        self.altitude = msg.data[2]
+        s = np.array(msg.data[3:5])
+        self.speed = np.linalg.norm(s)
 
-    def verifyAltitude(self, altitude, ref_alt=0):
-        return abs(altitude-ref_alt) <= 0.1
-
-    def __call__(self, command):
-
-        if self.mode == None or self.state == None:
-            print('waiting for the mode states')
-            return 0
-        # print(self.userInput, self)
-        if self.userInput == ARM:
-            mode = GUIDED
-            self.set_mode_srv(0, mode)
-            sleep(0.05)
-            self.arming_srv(True)
-            sleep(0.1)
-
-        elif self.userInput == TAKEOFF:
-            if self.state != HOVERING:
-                mode = GUIDED
-                self.set_mode_srv(0, mode)
-                sleep(0.05)
-                self.arming_srv(True)
-                sleep(0.05)
-                self.takeoff_srv(0, 0, 0, 0, self.takeoff_alt)
-                sleep(0.1)
-
-        elif self.userInput == LAND:
-            if self.state == LANDED:
-                mode = STABILIZE
-                self.set_mode_srv(0, mode)
-                sleep(0.05)
-            elif self.mode == LAND:
-                pass
-            else:
-                self.land_srv()
-
-        elif self.userInput == CONTROL:
-            if self.state == HOVERING or self.state == CONTROL:
-                self.command.header.stamp=rospy.Time().now()
-                self.command.acceleration_or_force=Vector3(*command)
-                self.command_pub.publish(self.command)
-            else:
-                print('You need to first hover to control the robot')
-
-        elif self.userInput == PILOT:
-            print('Pilot takeover mode')
-
-        elif self.userInput == END:
-            command=PoseStamped()
-            command.pose.position=Point(0,0,self.takeoff_alt)
-            self.go_home_pub.publish(command)
-            # self.command.pose.position = Point(0, 0, self.takeoff_alt)
-            # self.command_pub.publish(self.command)
+    def __call__(self):
+        pass
 
     def __repr__(self) -> str:
         return 'Armed: '+str(self.armed)+'|Mode: '+str(self.mode) + '|State: ' + str(self.state)
@@ -126,13 +143,10 @@ class RobotModeState(rospy.Subscriber):
 
 def main():
     rospy.init_node('test', anonymous=True)
-
     rate = rospy.Rate(3)
     s = RobotModeState()
-    rospy.Subscriber('/mavros/local_position/pose',PoseStamped, s.robotStateCallback)
     while not rospy.is_shutdown():
-        command = [5, 5, 5]
-        s(command)
+        # s()
         rate.sleep()
 
 

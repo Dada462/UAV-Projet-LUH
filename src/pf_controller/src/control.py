@@ -3,20 +3,18 @@ import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stamped,Quaternion
-from sensor_msgs.msg import Imu
 from mavros_msgs.msg import PositionTarget,AttitudeTarget
 from numpy import cos, sin, tanh, pi
 import threading
-from tools_3D import Path_3D,R,sawtooth
-from MissionDisplayer3D import MainWindow, plot2D
+from tools import Path_3D,R,sawtooth
+from MissionDisplayer import MainWindow, plot2D
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 import sys
 from scipy.spatial.transform import Rotation
 from scipy import signal
-import matplotlib.pyplot as plt
-from time import time
 from scipy.linalg import expm,logm
 from RobotStateMachine import RobotModeState
+from ActionServer import ActionServer
 
 class PID():
     def __init__(self):
@@ -26,12 +24,12 @@ class PFController():
     def __init__(self):
         rospy.init_node('pf_controller', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
-        # rospy.Subscriber('/mavros/imu/data', Imu, self.imu_callback)
         self.init_path()
         
         app = QtWidgets.QApplication(sys.argv)
         self.displayer=MainWindow(self)
         self.sm=RobotModeState()
+        self.pathAction=ActionServer(self)
         # self.p=plot2D()
 
         ros_thread = threading.Thread(target=self.main,daemon=True)
@@ -45,20 +43,12 @@ class PFController():
     def adj_inv(self,A):
         return np.array([A[2,1],A[0,2],A[1,0]])
     
-    def imu_callback(self,data):
-        self.imu_data=data.linear_acceleration.x,data.linear_acceleration.y,data.linear_acceleration.z
-        a_mes=np.array([*self.imu_data])
-        R=Rotation.from_euler('XYZ',self.state[6:9],degrees=False).as_matrix()
-        self.a_mes=R@a_mes
-        # print('Imu:',*np.round(R@a_mes,2))
-    
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
-        # accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
+        accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
         # data_view=rospy.Publisher('/dataView', Vector3, queue_size=10)
-
         f=30
         rate = rospy.Rate(f)
         i=0
@@ -67,109 +57,37 @@ class PFController():
         while not rospy.is_shutdown():
             s_pos=self.path_to_follow.local_info(self.s).X
             self.displayer.update_state(self.state,s_pos)
-            u=self.LPF_control_3D_v3()
-            # self.ds=0
-            # u=self.LPF_control_3D()
-            # u=self.LPF_control_kin()
-            if np.linalg.norm(self.state[:2],ord=np.inf)>100:
-                self.displayer.mission_state['start']=False
-                self.displayer.mission_state['keyboard']=False
-            if self.displayer.mission_state['start']:
-                ############################## Speed Topic ##############################
-                # command=TwistStamped()
-                # command.twist.linear=Vector3(*u)
-                # command.twist.angular=Vector3(0.,0.,0)
-                # speed_pub.publish(command)
-                ############################## Speed Topic ##############################
-    
-                
-
-                ############################## Attitude Topic ##############################
-                # msg = AttitudeTarget()
-                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                # k3,k4=0.01,2
-                # w=self.state[6:9]
-                # wd=k3*u
-                # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-                # wd=D@wd
-                # u=k4*(wd-w)
-                # msg.body_rate=Vector3(*u[:2],0)
-                # # try:
-                # #     k,k1=self.vars[0]
-                # # except:
-                # #     k,k1=0.2,1
-                # # ddz=k*np.tanh(k1*u[2])
-                # msg.thrust=0.5
-                # attitude_pub.publish(msg)
-                ############################## Attitude Topic ##############################
-                
-                
-
-                ############################## Waypoint Topic ##############################
-                # # Join a point
-                # T=20
-                # t=i/f
-                # # P=signal.square(2 * np.pi * t/(2*T))*np.array([-1,1])*10
-                # P=R(2 * np.pi * t/T)[:,0]*10
-                # command=PoseStamped()
-                # command.pose.position=Point(*P,10)
-                # go_home_pub.publish(command)
-               
-                # # Using point joining of the FC
-                # command=PoseStamped()
-                # command.pose.position=Point(*s_pos,10)
-                # go_home_pub.publish(command)
-                ############################## Waypoint Topic ##############################
-                
-                self.sm.robotStateCallback(self.state[2])
-                self.sm(u)
-                
-                
+            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' :
+                u=self.LPF_control_3D_v3()
                 ############################## Acceleration Topic ##############################
-                # command = PositionTarget()
-                # command.header.stamp=rospy.Time().now()
-                # command.coordinate_frame = PositionTarget.FRAME_BODY_NED
-                # command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
-                # command.acceleration_or_force=Vector3(*u)
-                # try:
-                #     accel_command_pub.publish(command)
-                # except:
-                #     command.acceleration_or_force=Vector3(0,0,0)
-                #     accel_command_pub.publish(command)
-
-                ############################## Acceleration Topic ##############################
-            elif self.displayer.mission_state['keyboard']:
-                key=np.array([self.displayer.keyboard]).reshape(-1,2)
-                D=np.array([[0,-1,0],[1,0,0],[0,0,-1]])
-                u=0.1*D@(key[:,0]-key[:,1])
-
-                msg = AttitudeTarget()
-                # msg.type_mask=AttitudeTarget.IGNORE_PITCH_RATE+AttitudeTarget.IGNORE_YAW_RATE+AttitudeTarget.IGNORE_ROLL_RATE
-                msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                msg.thrust=0.5
-                # q=Rotation.from_euler('XYZ',angles=u,degrees=True).as_quat()
-                # msg.orientation=Quaternion(*q)
-                w=self.state[6:9]
-                # w[2]=0
-                msg.body_rate=Vector3(*2*(u-w)[:2],0)
-                attitude_pub.publish(msg)
-
-            else:
+                command = PositionTarget()
+                command.header.stamp=rospy.Time().now()
+                command.coordinate_frame = PositionTarget.FRAME_BODY_NED
+                command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
+                command.acceleration_or_force=Vector3(*u)
+                accel_command_pub.publish(command)
+                ############################## Acceleration Topic ##############################        
+            elif self.sm.userInput=='HOME':
                 command=PoseStamped()
                 command.pose.position=Point(0,0,10)
                 q=Rotation.from_euler('XYZ',[0,0,90],degrees=True).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
-                
+            elif self.sm.state=='HOVERING':
+                speed_pub.publish(TwistStamped())
+            
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
             i+=1
             rate.sleep()
     
-    def init_path(self):
+    def init_path(self,points=[]):
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
-        
+        if points==-1:
+            self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
+            self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
+            return 0
         ############################### Sphere Path ###############################
         f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
         # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
@@ -180,7 +98,7 @@ class PFController():
         points=np.array(points).T
         self.path_to_follow=Path_3D(points,type='waypoints')
         ############################### Sphere Path ###############################
-        # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
+       
         # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/7)+5,2*cos(2*pi*t/3)+10]),[-10,30],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*(2+sin(10*t))*cos(t),5*(2+sin(10*t))*sin(t),0*t+10]),[-10,10],type='parametric')
