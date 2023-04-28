@@ -16,7 +16,7 @@ class ActionServer():
             '/user_input', String, queue_size=10)
         self.user_input = rospy.Subscriber(
             '/user_input', String, self.userInputCallback)
-        self.userInput = 'FOLLOWPATH'
+        self.userInput = ''
         self.path = None
         self.distance_to_goal = inf
         self.pfc = pfc

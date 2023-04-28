@@ -6,15 +6,15 @@ from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stam
 from mavros_msgs.msg import PositionTarget,AttitudeTarget
 from numpy import cos, sin, tanh, pi
 import threading
-from tools import Path_3D,R,sawtooth
-from MissionDisplayer import MainWindow, plot2D
-from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
+from controller_tools.tools import Path_3D,R,sawtooth
+from controller_tools.MissionDisplayer import MainWindow, plot2D
+from pyqtgraph.Qt import QtWidgets
 import sys
 from scipy.spatial.transform import Rotation
 from scipy import signal
 from scipy.linalg import expm,logm
-from RobotStateMachine import RobotModeState
-from ActionServer import ActionServer
+from controller_tools.RobotStateMachine import RobotModeState
+from controller_tools.ActionServer import ActionServer
 
 class PID():
     def __init__(self):
@@ -74,12 +74,12 @@ class PFController():
                 ############################## Acceleration Topic ##############################        
             elif self.sm.userInput=='HOME':
                 command=PoseStamped()
-                command.pose.position=Point(0,0,10)
-                q=Rotation.from_euler('XYZ',[0,0,90],degrees=True).as_quat()
+                command.pose.position=Point(0,0,0.5)
+                q=Rotation.from_euler('XYZ',[0,0,0],degrees=True).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
                 self.s=self.ds=0
-            elif self.sm.state=='HOVERING':
+            elif self.sm.state=='HOVERING' or self.sm.state=='STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s=self.ds=0
             
@@ -207,12 +207,18 @@ class PFController():
         de1=np.array([0,dy1,dw1])
         # Ke,vc,k1,k0,Kth=2.4,_,1.7,2.5,4
         t=-Ke*vc*Vp[0]**2*np.array([1,0,0])*np.tanh(F.C/5)*6
-        dVp=2*np.array([(vc-Vp[0]),0,0])-k1*de1-k0*e1+t
+        # print(t[0])
+        # vc=np.clip(vc,0,np.sqrt(2/F.C))
+      
+        # dVp=2*np.array([(vc-Vp[0]),0,0])-k1*de1-k0*np.tanh(e1/2)+t
+        dVp=2*np.array([(vc-Vp[0]),0,0])-k1*de1-k0*np.clip(e1,-2,2)+t
 
         # Acceleration commands
         dVr=Rtheta.T@(dVp-dRtheta@Vr)
         dVr=dVr+self.adj(wr)@Vr
         dVr=Kth*np.tanh(dVr/Kth)
+        # if np.linalg.norm(Vr)>0.5:
+        #     dVr=-2*Vr
         self.v1=np.linalg.norm(Vp)
         u=Rm@dVr
         u=np.clip(u,-2,2)

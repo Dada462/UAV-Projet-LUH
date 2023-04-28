@@ -1,4 +1,4 @@
-from pf_controller.src.tools import R,Path_3D
+from controller_tools.tools import R,Path_3D
 import numpy as np
 from numpy import pi,cos,sin
 import pyqtgraph as pg
@@ -411,7 +411,10 @@ class MainWindow(QtWidgets.QMainWindow):
 #     points.append(f(t))
 # points=np.array(points).T
 # p=Path_3D(points,type='waypoints')
-p=Path_3D(lambda t : np.array([0.1*t**2+1,5*sin(0.25*t**2),0*t]),[0,15],type='parametric')
+f=lambda t : R(0.15,'x')@np.array([1.25*np.cos(t),1.25*np.sin(t),0*t+0.5])
+# p=Path_3D(lambda t : np.array([0.1*t**2+1,5*sin(0.25*t**2),0*t]),[0,15],type='parametric')
+p=Path_3D(f,[0,15],type='parametric')
+    
 
 F=p.local_info(p.s)
 pts=F.X.T

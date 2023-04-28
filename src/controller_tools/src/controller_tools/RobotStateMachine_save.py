@@ -30,7 +30,7 @@ class RobotModeState():
         self.blockCommands = True
         self.armed = None
         self.mode = None
-        self.takeoff_alt = 1.5
+        self.takeoff_alt = 0.5
         self.altitude = -1
         self.userInput = None
         self.takeoffAccepted = False
@@ -86,49 +86,75 @@ class RobotModeState():
     def main(self):
         rate = rospy.Rate(15)
         while not rospy.is_shutdown():
-            # print(self)
-            if self.altitude == -1:
+            print(self)
+            self.stateMachine()
+            rate.sleep()
+    
+    def stateMachine(self):
+        if self.altitude == -1:
                 go_on = False
-            else:
-                go_on = True
-            if go_on:
-                if self.state == INIT:
-                    if abs(self.altitude) < 0.1:
-                        self.state = LANDED
-                    else:
-                        self.state = HOVERING
-                if self.mode == LOITER:
-                    self.state == PILOT
-                if self.state == PILOT:
-                    if self.userInput == LAND:
-                        pass
-                if self.state == LANDED:
-                    if self.userInput == HOVER:
-                        if self.mode == GUIDED and self.armed and self.takeoffAccepted:
-                            self.state = TAKEOFF
-                elif self.state == TAKEOFF:
+        else:
+            go_on = True
+        if go_on:
+            if self.state == INIT:
+                if abs(self.altitude) < 0.1:
+                    self.state = LANDED
+                else:
+                    self.state = HOVERING
+            elif self.state == PILOT:
+                if self.mode==LAND:
+                    self.state==LANDING
+                elif self.mode==GUIDED:
+                    self.state=INIT
+            elif self.state == LANDED:
+                if self.userInput == HOVER and self.mode == GUIDED and self.armed and self.takeoffAccepted:
+                    self.state = TAKEOFF
+                elif self.mode not in [GUIDED,LAND]:
+                    if self.mode!=STABILIZE or abs(self.altitude) >= 0.1:
+                        self.state=PILOT
+            elif self.state == TAKEOFF:
+                expectedMode=GUIDED
+                if self.mode != expectedMode or self.mode==LOITER:
+                    self.state=PILOT
+                else:
                     if abs(self.altitude-self.takeoff_alt) < 0.1:
                         self.state = HOVERING
-                elif self.state == HOVERING:
+            elif self.state == HOVERING:
+                expectedMode=GUIDED
+                if self.mode != expectedMode or self.mode==LOITER:
+                    self.state=PILOT
+                else:
                     if self.userInput == LAND:
                         if self.landAccepted and self.mode == LAND:
                             self.state = LANDING
                     elif self.userInput == FOLLOWPATH:
                         self.state = CONTROL
-                elif self.state == LANDING:
+            elif self.state == LANDING:
+                expectedMode=LAND
+                if self.mode != expectedMode or self.mode==LOITER:
+                    self.state=PILOT
+                else:
                     if abs(self.altitude) < 0.1:
                         self.state = LANDED
-                elif self.state == CONTROL:
-                    if self.userInput == HOVER:
+            elif self.state == CONTROL:
+                expectedMode=GUIDED
+                if self.mode != expectedMode or self.mode==LOITER:
+                    self.state=PILOT
+                else:
+                    if self.userInput == HOVER or self.userInput == LAND:
                         self.state = STOPPING
-                    elif self.userInput == LAND:
-                        if self.landAccepted and self.mode == LAND:
-                            self.state = LANDING
-                elif self.state == STOPPING:
-                    if self.speed < 0.25:
+            elif self.state == STOPPING:
+                expectedMode=GUIDED
+                if self.mode != expectedMode or self.mode==LOITER:
+                    self.state=PILOT
+                else:
+                    if self.speed>=0.1:
+                        pass
+                    elif self.speed < 0.1 and self.userInput==HOVER:
                         self.state = HOVERING
-            rate.sleep()
-
+                    elif self.userInput == LAND and self.landAccepted and self.mode == LAND and self.speed <0.1:
+                        self.state = LANDING
+    
     def stateCallback(self, msg):
         self.altitude = msg.data[2]
         s = np.array(msg.data[3:5])

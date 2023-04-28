@@ -221,25 +221,29 @@ class MainWindow(QtWidgets.QMainWindow):
         start_mission = QPushButton(self)
         stop_mission = QPushButton(self)
         reset_mission = QPushButton(self)
-        keyboard_mode = QPushButton(self)
+        # keyboard_mode = QPushButton(self)
+        land_button = QPushButton(self)
 
         start_mission.setText('Follow Path')
         stop_mission.setText('Home')
         hover.setText('Hover')
         reset_mission.setText('Reset Data')
-        keyboard_mode.setText('Keyboard')
+        # keyboard_mode.setText('Keyboard')
+        land_button.setText('Land')
 
         start_mission.setGeometry(QtCore.QRect(0, 0, 100, 25))
         stop_mission.setGeometry(QtCore.QRect(105, 0, 100, 25))
         hover.setGeometry(QtCore.QRect(205, 0, 100, 25))
         reset_mission.setGeometry(QtCore.QRect(305, 0, 100, 25))
-        keyboard_mode.setGeometry(QtCore.QRect(405, 0, 100, 25))
+        # keyboard_mode.setGeometry(QtCore.QRect(405, 0, 100, 25))
+        land_button.setGeometry(QtCore.QRect(405, 0, 100, 25))
 
         start_mission.clicked.connect(self.start_recording_mission)
         stop_mission.clicked.connect(self.stop_recording_mission)
         hover.clicked.connect(self.hover_pub)
         reset_mission.clicked.connect(self.reset_mission_data)
-        keyboard_mode.clicked.connect(self.keyboard_mode)
+        # keyboard_mode.clicked.connect(self.keyboard_mode)
+        land_button.clicked.connect(self.land_pub)
 
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
@@ -461,6 +465,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def hover_pub(self):
         self.commands_sender.publish(String('HOVER'))
+    
+    def land_pub(self):
+        self.commands_sender.publish(String('LAND'))
 
     def reset_mission_data(self):
         self.pfc.s = 0
