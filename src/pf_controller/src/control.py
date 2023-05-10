@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from typing import Any
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -15,15 +16,26 @@ from scipy import signal
 from scipy.linalg import expm,logm
 from controller_tools.RobotStateMachine import RobotModeState
 from controller_tools.ActionServer import ActionServer
+from sensor_msgs.msg import Imu
+from time import time
+from scipy.signal import square as sq
 
 class PID():
     def __init__(self):
         self.data=0
+    
+    def __call__(self,data,bound):
+        if bound<=0:
+            raise ValueError('Bound must be positive')
+        self.data=self.data+data
+        self.data=np.clip(self.data,-bound,bound)
 
 class PFController():
     def __init__(self):
         rospy.init_node('pf_controller', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
+        self.imuData=np.zeros(3)
+        rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
         
         app = QtWidgets.QApplication(sys.argv)
         self.displayer=MainWindow(self)
@@ -31,13 +43,15 @@ class PFController():
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
-        # self.p=plot2D()
+        self.p=plot2D()
 
         ros_thread = threading.Thread(target=self.main,daemon=True)
         ros_thread.start()
 
         sys.exit(app.exec_())
-    
+    def imuCallback(self,msg):
+        self.lastImuData=self.imuData
+        self.imuData=np.array([msg.linear_acceleration.x,msg.linear_acceleration.y,msg.linear_acceleration.z])
     def adj(self,w):
         return np.array([[0,-w[2],w[1]] , [w[2],0,-w[0]] , [-w[1],w[0],0]])
 
@@ -47,7 +61,7 @@ class PFController():
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
+        attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
         f=30
         rate = rospy.Rate(f)
@@ -57,13 +71,16 @@ class PFController():
         self.I=PID()
         self.displayer.clickMethod()
         s_pos=np.zeros(3)
+        self.error=0
+        self.last_dVr=np.zeros(3)
+        self.t0=time()
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos=self.path_to_follow.local_info(self.s).X
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
-            self.displayer.update_state(self.state,s_pos)
-            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.pathIsComputed:
-                u=self.LPF_control_3D_v3()
+            self.displayer.update_state(self.state,s_pos,self.error)
+            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
+                u=self.LPF_control_3D_v4()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -79,9 +96,20 @@ class PFController():
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
                 self.s=self.ds=0
+                self.s=1.25
+            elif self.sm.userInput=='WAIT':
+                wait_pos=self.path_to_follow.local_info(self.path_to_follow.s_max).X
+                command=PoseStamped()
+                command.pose.position=Point(*wait_pos)
+                q=Rotation.from_euler('XYZ',self.state[6:9],degrees=True).as_quat()
+                command.pose.orientation=Quaternion(*q)
+                go_home_pub.publish(command)
+                self.ds=0
             elif self.sm.state=='HOVERING' or self.sm.state=='STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s=self.ds=0
+            
+           
             
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
@@ -122,8 +150,114 @@ class PFController():
         self.s=0
         self.ds=0
 
-    def LPF_control_3D_v3(self):
-        Ke,k0,k1,Ks,Kth,nu_d,_,vc=self.displayer.values
+    def LPF_control_3D_v4(self):
+        state=self.state
+        X = state[0:3]
+        Vr = state[3:6]
+        s = self.s
+        wr=state[9:12]
+
+        Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
+        dRm=Rm@self.adj(wr)
+        
+        F=self.path_to_follow.local_info(s)
+        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
+        
+        Rtheta = Rpath.T@Rm
+        s1, y1, w1 = Rpath.T@(X-F.X)
+        ks = 1.5
+        ds = (Vr@Rpath)[0]+ks*s1
+        if s<0.01 and ds<0:
+            ds=0
+        self.ds=ds
+        dRpath=F.dR*ds
+        dRtheta=dRpath.T@Rm+Rpath.T@dRm
+        
+        ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
+
+        # Vpath,k0,k1,kpath,nu_d=self.displayer.values
+        Vpath,k0,k1,kpath,nu_d=0.5,1.5,2,0.55,1.5
+
+        
+        e=np.array([s1,y1,w1])
+        # de=np.array([ds1,dy1,dw1])
+        
+        e1=np.array([0,y1,w1])
+        de1=np.array([0,dy1,dw1])
+        # kpath=0.6
+        self.error=100*np.linalg.norm(e,ord=np.inf)
+        # print(self.error)
+        speed=np.linalg.norm(Vr)
+        self.speed=speed
+        
+        # vp1=Rtheta@Vr
+        s=np.linspace(s,s+k0,50)
+        # ds=np.gradient(s)
+        Fahead=self.path_to_follow.local_info(s)
+        Cahead=np.max(Fahead.C)
+        a=np.sqrt(1/(1e-6+Cahead))
+        nu_d=np.clip(nu_d,0.2,a)
+
+        
+        
+        # cmax=self.path_to_follow.max_speed(s)
+        # cmax=np.max(cmax)
+        # smax=np.sqrt(1/(1e-3+cmax))
+        # nu_d=np.clip(nu_d,0.2,smax)
+
+        d_path=np.linalg.norm(e1/kpath)
+        ve=nu_d*(1-np.tanh(d_path))
+        dve=-nu_d/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+        Vp=-Vpath*np.tanh(e1/kpath)+np.array([ve,0,0])
+        
+        Rd=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
+        data=Rd@self.imuData
+        Rd1=Rotation.from_euler('XYZ',[0,0,self.state[8]],degrees=False).as_matrix()
+        data=Rd1.T@data
+        data[2]=data[2]-9.81
+        
+        # self.p.plot(time(),data[2],2)
+        # t=-2*vp1**2*np.array([1,0,0])*np.tanh((Cahead+F.C)/5)*10
+        vplin=(Rtheta@Vr)[0]
+        Ke=2.4
+        t=-Ke*np.clip(vplin**2,-4,4)*np.array([1,0,0])*np.tanh(F.C/5)*6
+        dVp=-Vpath/kpath*(1-np.tanh(e1/kpath)**2)*de1+np.array([dve,0,0])+t
+        
+        Vd=Rtheta.T@Vp
+        dVd=dRtheta.T@Vp+Rtheta.T@dVp
+        # self.I(0.05*(Vd-Vr),0.25)
+        dVr=dVd+k1*(Vd-Vr)
+        dVr=dVr+self.adj(wr)@Vr
+        dVr=np.tanh(dVr/3)*3
+        self.last_dVr=dVr
+
+        # T=0.25
+        # dVr=np.sin(pi*(time()-self.t0)/T)*np.array([1,0,0])*1
+        
+
+        self.p.plot(time()-self.t0,dVr[0],'xd','#f5300d')
+        self.p.plot(time()-self.t0,data[0],'xr','#f5af0d')
+        
+        self.p.plot(time()-self.t0,dVr[1],'yd','#49f50d')
+        self.p.plot(time()-self.t0,data[1],'yr','#0df5c0')
+
+        # self.p.plot(time()-self.t0,dVr[2],'zd','#0dd5f5')
+        # self.p.plot(time()-self.t0,data[2],'zr','#610df5')
+
+        self.p.plot(time()-self.t0,F.C,'C','#f50d81')
+        self.p.plot(time()-self.t0,s1,'s1','#f50d4c')
+        self.p.plot(time()-self.t0,y1,'y1','#f50d4c')
+        self.p.plot(time()-self.t0,w1,'w1','#f50d4c')
+
+        u=-Rpath@de1
+        pos=X
+        dir=u
+        arrow=np.vstack((pos,pos+3*dir))
+        self.displayer.control_output.setData(pos=arrow)
+        return dVr
+
+    def LPF_control_3D_PID(self):
+        # Ke,k0,k1,Ks,Kth,nu_d,_,vc=self.displayer.values
         
         # Robot state
         X = self.state[0:3]
@@ -146,7 +280,6 @@ class PFController():
         self.displayer.s1_arrow.setData(pos=s1)
         self.displayer.y1_arrow.setData(pos=y1)
         self.displayer.w1_arrow.setData(pos=w1)
-        # dRpath=ds*np.vstack((F.ds1,F.dy1,F.dw1)).T
        
         Rtheta = Rpath.T@Rm
         
@@ -156,7 +289,7 @@ class PFController():
         s1, y1, w1 = e
         S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
         Vp=Rtheta@Vr
-        ks=1
+        ks=2
         ds=Vp[0]+ks*s1
         if s<0.05 and ds < -1:
             ds=0
@@ -169,350 +302,36 @@ class PFController():
 
         self.error=100*np.linalg.norm(e,ord=np.inf)
         
-
-
-        # ############# 1 #############
-        # # Moving point
-        # dds=-ds+ks*s1+0.4*ds1
-        # # dds=0
-        # # if s<0.05 and ds < -1:
-        # #     dds=0
-        # self.dds=dds
-        # # Acceleration commands
-        # Vp=Rtheta@Vr
-        # dVp=-Vp+ds*dS-k1*np.tanh(Ks*e)+2*np.array([1.5-Vp[0],0,0])
-        # # dVr=Rtheta.T@(dVp-dRtheta@Vr)
-        # dVr=dRtheta.T@Vp+Rtheta.T@dVp
-
-        # ############# 2 #############
-        # # Moving point
-        # Vp=Rtheta@Vr
-        # # print(dS)
-        # dVp=(-Vp+ds*dS-k1*np.tanh(Ks*e))+2*np.array([1-Vp[0],0,0])
-        # dds=-ds-s1*((Vp+dVp-ds*dS)[0])+ks*s1+0.7*ds1
-        # # dds=0
-        # # self.s=1
-        # # dds=0
-        # # if s<0.05 and ds < -1:
-        # #     dds=0
-        # self.dds=dds
-        # # Acceleration commands
-        # dVr=Rtheta.T@(dVp-dRtheta@Vr)
-        # # dVr=dRtheta.T@Vp+Rtheta.T@dVp
-        # # print((dRtheta.T@Vp).all()==(Rtheta.T@dRtheta@Vr).all())
-
-        ############# 3 #############
+        
         
         e1=np.array([0,y1,w1])
         de1=np.array([0,dy1,dw1])
-        # Ke,vc,k1,k0,Kth=2.4,_,1.7,2.5,4
-        t=-Ke*vc*Vp[0]**2*np.array([1,0,0])*np.tanh(F.C/5)*6
-        # print(t[0])
-        # vc=np.clip(vc,0,np.sqrt(2/F.C))
-      
-        # dVp=2*np.array([(vc-Vp[0]),0,0])-k1*de1-k0*np.tanh(e1/2)+t
-        dVp=2*np.array([(vc-Vp[0]),0,0])-k1*de1-k0*np.clip(e1,-2,2)+t
+        Ke,vc,k1,k0,Kth=2.4,1.5,1.7,2.5,4
+        
+        # Slowing down term when highly curved turn is encountered
+        t=-Ke*np.clip(Vp[0]**2,-4,4)*np.array([1,0,0])*np.tanh(F.C/5)*6
+        
+        # Look ahead curvature
+        s=np.linspace(s,s+k0,50)
+        Fahead=self.path_to_follow.local_info(s)
+        Cahead=np.max(Fahead.C)
+        a=np.sqrt(1.5/(1e-6+Cahead))
+        vc=np.clip(vc,0.2,a)
 
+        kpath=0.55
+        d_path=np.linalg.norm(e1/kpath)
+        ve=vc*(1-np.tanh(d_path))
+        dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+
+        dVp=np.array([dve+2*(ve-Vp[0]),0,0])-k1*np.clip(de1,-2,2)-k0*np.clip(e1,-1.5,1.5)+t
+        
         # Acceleration commands
         dVr=Rtheta.T@(dVp-dRtheta@Vr)
         dVr=dVr+self.adj(wr)@Vr
         dVr=Kth*np.tanh(dVr/Kth)
-        # if np.linalg.norm(Vr)>0.5:
-        #     dVr=-2*Vr
-        self.v1=np.linalg.norm(Vp)
-        u=Rm@dVr
-        u=np.clip(u,-2,2)
-        pos=X
-        dir=u
-        arrow=np.vstack((pos,pos+2*dir))
-        self.displayer.control_output.setData(pos=arrow)
         return dVr
-
-    def LPF_control_3D_v2(self):
-        X = self.state[0:3]
-        Vr = self.state[3:6]
-        s = self.s
-        # phi,theta,psi=self.state[6:9]
-        wr=self.state[9:12]
-
-        Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
-        dRm=Rm@self.adj(wr)
-        
-        F=self.path_to_follow.local_info(s)
-        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
-        Rtheta = Rpath.T@Rm
-        s1, y1, w1 = Rpath.T@(X-F.X)
-        ks = 1
-        ds = (Rtheta@Vr)[0]+ks*s1
-        dRpath=ds*F.dR
-        dRtheta=dRpath.T@Rm+Rpath.T@dRm
-        
-        
-        self.error=100*np.linalg.norm([s1,y1,w1],ord=np.inf)
-        self.v1=0
-        speed=np.linalg.norm(Vr)
-        
-        # self.p.plot(time(),F.C,1)
-        # self.p.plot(time(),F.dC,2)
-        # ds=0
-        # self.s=5
-        if s<0.05 and ds < -1:
-            ds=0
-        self.ds=ds
-        ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
-
-        Ke,k0,k1,K_s,Kth,nu_d,Kc,v_e=self.displayer.values
-        # self.p.plot(time(),speed)
-        # self.p.plot(time(),nu_c,1)
-        
-        # Low speed
-        # 0.45, 0.15, 4.0, 0.15, 0.4, 0.1
-        
-        # Ke=3
-        # k1=3
-        # nu_d=1
-
-        e1=np.array([0,y1,w1])
-        de1=np.array([0,dy1,dw1])
-        e=np.array([s1,y1,w1])
-
-        # v_e=1
-        Vp=np.array([nu_d*(1-np.tanh(K_s*np.linalg.norm(e1))),-v_e*np.tanh(Ke*y1),-v_e*np.tanh(Ke*w1)])
-        # Vp=np.array([-K_s*s1,-v_e*np.tanh(Ke*y1),-v_e*np.tanh(Ke*w1)])
-        # print(np.round(e,2))
-        pos=F.X
-        ss1=np.vstack((pos,pos+2*F.s1))
-        sy1=np.vstack((pos,pos+2*F.y1))
-        sw1=np.vstack((pos,pos+2*F.w1))
-        self.displayer.s1_arrow.setData(pos=ss1)
-        self.displayer.y1_arrow.setData(pos=sy1)
-        self.displayer.w1_arrow.setData(pos=sw1)
-        # print(Vp)
-        # Vp=Vp+np.array([nu_c*(1.2-np.tanh(Kc*F.C)),-0.75*np.tanh(Ke*dy1),-0.75*np.tanh(Ke*dw1)])
-        t=-2.5*ds**2*F.C*np.array([1,0,0])
-        dVp=-(1-np.tanh(np.array([K_s*np.linalg.norm(e1),Ke*y1,Ke*w1]))**2)*np.array([e1@de1,dy1,dw1])+t
-        # dVp=-(1-np.tanh(np.array([K_s*np.linalg.norm(e1),-Ke*y1,-Ke*w1]))**2)*np.array([1,dy1,dw1])
-        D=np.diag((K_s*nu_d,v_e*Ke,v_e*Ke))
-        dVp=D@dVp
-        # print(np.round(dVp,2))
-        Vd=Rtheta.T@Vp
-        # Vd=Rpath@Vp
-        # return Vd
-        dVd=dRtheta.T@Vp+Rtheta.T@dVp
-        if self.error>30:
-            self.I.data=0
-        dVr=dVd+k1*(Vd-Vr)+k0*self.I.data
-        # print(dVd)
-        self.I.data+=(Vd-Vr)
-        self.I.data=np.clip(self.I.data,-1,1)
-        # dVr=dVr+self.adj(wr)@Vr
-        dVr=Kth*np.tanh(dVr/Kth)
-        u=Rm@dVr
-        u=np.clip(u,-2,2)
-        pos=X
-        dir=u
-        arrow=np.vstack((pos,pos+2*dir))
-        self.displayer.control_output.setData(pos=arrow)
-        return dVr
-    
     def update_state(self,data):
         self.state=np.array([*data.data])
-    
-    def speed_control(self):
-        V=self.state[3:6]
-        w=self.state[6:9]
-        Vd=np.array([0.3,0,0])
-        k=0.2
-        wd=k*np.tanh(Vd-V)
-        D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-        wd=D@wd
-        return 2*(wd-w)
-    
-    def LPF_control_kin(self,x):
-        X = x[0:2]
-        theta_m = x[4]
-        s = self.s
-        # F = path_info_update(self.path_to_follow, s)
-        F=self.path_to_follow.local_info(s)
-        theta_c = F.psi
-        theta = sawtooth(theta_m-theta_c)
-        s1, y1 = R(theta_c).T@(X-F.X)
-        # psi_a,Kdy1=self.vars
-        Kdy1=0.5
-        psi_a=pi/3
-        delta = -psi_a*tanh(Kdy1*y1)
-        beta=sawtooth(delta-theta)
-        
-        psi = delta
-        nu=0.1
-        ks = 1
-        ds = cos(psi)*nu + ks*s1
-        # theta_m_d=-pi/4
-        # dtheta_m_d=0
-        # k2=1
-        # dtheta_m=dtheta_m_d+k2*sawtooth(theta_m_d-theta_m)
-        u,v=nu*cos(beta),nu*sin(beta)
-        self.ds=ds
-        return np.array([u,v,0])
-    
-    def LPF_control_dyn(self):
-        X = self.state[0:2]
-        Vt = self.state[3:5]
-        s = self.s
-        theta_m, dtheta_m = self.state[8],self.state[11]
-        u, v = Vt
-        nu = np.linalg.norm(Vt)
-        beta=np.arctan2(v,u)
-
-        # print('Speed:',np.round(nu,2))
-        
-        # F = path_info_update(self.path_to_follow, s)
-        F=self.path_to_follow.local_info(s)
-
-        theta_c = F.psi
-        s1, y1 = R(theta_c).T@(X-F.X)
-        theta = sawtooth(theta_m-theta_c)
-        psi = sawtooth(theta+beta)
-
-        ks = 0.7
-        ds = cos(psi)*nu + ks*s1
-        self.ds=ds
-        # return 0
-        dtheta_c = F.C*ds
-        ds1, dy1 = R(theta)@Vt-ds*np.array([1-F.C*y1, F.C*s1])
-
-        psi_a=1.3
-        y10,k1,k2,k3,k4,k5=1.25,1.5,1.8,0.07,3,1
-        delta = -psi_a*tanh(y1/y10)
-        ddelta = -psi_a*(1-tanh(y1/y10)**2)*dy1/y10
-        dpsi=ddelta+k2*sawtooth(delta-psi)
-        dbeta=dpsi-dtheta_m+dtheta_c
-
-        nu_d=0.25
-        dnu=k1*(nu_d-nu)
-        # theta_m_d=pi/4
-        # dtheta_m_d=0
-        # ddtheta_m_d=0
-        # ddtheta_m=ddtheta_m_d+2*(dtheta_m_d-dtheta_m)+1*(theta_m_d-theta_m)
-        # dbeta=-0.25*beta
-        # dnu=(2-nu)
-        C=R(beta,'z')@np.array([dnu,nu*dbeta,0])
-        w=self.state[6:9]
-        # k=0.07
-        wd=k3*np.tanh(C/k5)
-        # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-        D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-        wd=D@wd
-        u=k4*(wd-w)
-
-        return u
-
-    def PLF_3D_Kin(self):
-        X = self.state[:3]
-        s=self.s
-
-        F=self.path_to_follow.local_info(s)
-        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
-        s1, y1, w1 = Rpath.T@(X-F.X)
-        
-        print(100*np.linalg.norm([s1,y1,w1],ord=np.inf))
-        
-        psi_a=pi/2.2
-        e=np.array([s1,y1,w1])
-        cross_e=np.cross(np.array([1,0,0]),e)
-        k_delta=1
-        delta=-psi_a*np.tanh(k_delta*cross_e)
-        Rpsi=expm(self.adj(delta))
-        Rs=Rpath@Rpsi
-        nu=1
-        Vr=Rs@np.array([nu,0,0])
-
-        ks=3
-        ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
-        self.ds=ds
-
-        dX=Vr
-    
-        return dX
-            
-    def LPF_control_3D(self):
-        X = self.state[0:3]
-        Vr = self.state[3:6]
-        s = self.s
-        wr=self.state[9:12]
-        Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
-        dRm=Rm@self.adj(wr)
-        
-        u, v, w = Vr
-        nu = np.linalg.norm(Vr)
-        beta=np.arctan2(v,u)
-        gamma=np.arcsin(w/(nu+1e-6)) # Check
-        Rs=R(beta,'z')@R(gamma,'y')
-
-        
-        F=self.path_to_follow.local_info(s)
-        Rpath=np.vstack((F.s1,F.y1,F.w1)).T
-        dRpath=F.dR
-        
-        Rtheta = Rpath.T@Rm
-        Rpsi=Rtheta@Rs
-        
-        dRtheta=dRpath.T@Rm+Rpath.T@dRm
-        
-        s1, y1, w1 = Rpath.T@(X-F.X)
-        self.error=100*np.linalg.norm([s1,y1,w1],ord=np.inf)
-
-
-        ks = 2
-        # ds = (np.array([nu,0,0])@Rpsi)[0]+ks*s1
-        ds=0
-        self.ds=ds
-
-
-        ds1, dy1,dw1 = Rtheta@Vr-ds*np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
-
-        # psi_a=1.1
-
-        e=np.array([s1,y1,w1])
-        de=np.array([ds1,dy1,dw1])
-
-        cross_e=np.cross(np.array([1,0,0]),e)
-        dcross_e=np.cross(np.array([1,0,0]),de)
-        try:
-            # Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=self.vars # Attitude control
-            Ke,psi_a,Kpsi,knu,nu_d=self.vars  # Acceleration control
-        except:
-            # Ke,psi_a,Kpsi,knu,nu_d,k3,k4,k5=0.6,1,2.5,3,1,0.25,4.5,0.9 # Attitude control
-            Ke,psi_a,Kpsi,knu,nu_d=0.4,1,2.5,1,1.5 # Acceleration control
-            # 0.4,1,2.5,1,1.5 # for nu=1.5
-            print('it didnt work')
-        # Ke=0.8
-        # delta=-psi_a*np.tanh(Ke*cross_e*nu)
-        delta=-psi_a*np.tanh(Ke*cross_e)
-        # nu_d=1
-        # knu=1
-        dnu=knu*(nu_d-nu)
-        # ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e*nu)**2)*(dcross_e*nu+dnu*cross_e)
-        ddelta=-psi_a*Ke*(1-np.tanh(Ke*cross_e)**2)*dcross_e
-        Rdelta=expm(self.adj(delta))
-
-        # Kpsi=2
-        dRpsi=-Kpsi*logm(Rpsi@Rdelta.T)@Rpsi-Rpsi@self.adj(Rdelta.T@ddelta)
-
-        dRs=Rtheta.T@(dRpsi-dRtheta@Rs)
-        dVr=nu*dRs[:,0]+dnu*Rs[:,0]
-        # dVr=dVr+self.adj(wr)@Vr
-        u=dVr
-        # u=np.clip(u,-2,2)
-        # k3,k4=0.07,2
-        # w=self.state[6:9]
-        # wd=k3*np.tanh(k5*dVr)
-        # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-        # wd=D@wd
-        # u=k4*(wd-w)
-        return u
-
-
 if __name__ == '__main__':
     try:
         C=PFController()
