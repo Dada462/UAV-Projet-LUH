@@ -58,8 +58,8 @@ class Path_3D():
             raise ValueError('You must specity a type, either type=\'parametric\' or \'waypoints\'')
         if kwargs['type']=='parametric':
             f=args[0]
-            if len(args)!=1:
-                values_range=args[1]
+            if 'range' in kwargs:
+                values_range=kwargs['range']
             else:
                 values_range=[-10,10]
             t = np.linspace(*values_range, 6000)
@@ -83,6 +83,7 @@ class Path_3D():
         points=self.points.T
         df = np.gradient(points,axis=1)
         ds=norm(df,axis=0)
+        self.ds=ds
         s=np.cumsum(ds)
         s=s-s[0]
         self.s_max=np.max(s)
@@ -158,6 +159,21 @@ class Path_3D():
         self.s_to_dy1=s_to_dy1
         self.s_to_dw1=s_to_dw1
 
+        def gauss(x):
+            return np.exp(-x**2/2)/np.sqrt(2*pi)
+        # T=np.linspace(-1,1,1000)*3
+        # k=gauss(T)
+        # k=k/np.sum(k)
+
+        T=np.linspace(-1,1,100)*2
+        k=gauss(T)
+        k=k/np.sum(k)*2
+        y=np.convolve(dC,k,mode='same')
+        yd=np.abs(C[0]+np.cumsum(y*ds))
+        self.max_speed=interpolate.interp1d(s, yd)
+        # yd=np.sqrt(3/(1e-3+yd))
+        # yd=np.clip(yd,0,1.5)
+
     
     def local_info(self,s):
         s=np.clip(s,0,self.s_max)
@@ -183,37 +199,53 @@ class Path_3D():
 if __name__=='__main__':
     import pyqtgraph as pg
     pg.setConfigOptions(antialias=True)
-    def f(t):
-        x = np.cos(t)
-        y = np.sin(3*t)
-        z=10*t
-        return np.array([x,y,z])
+    # def f(t):
+    #     x = np.cos(t)
+    #     y = np.sin(3*t)
+    #     z=10*t
+    #     return np.array([x,y,z])
 
-    points=f(np.linspace(-10,10, 10000))
-    X,Y,Z=points
+    # points=f(np.linspace(-10,10, 10000))
+    # X,Y,Z=points
     # f=lambda t : R(0.1*t,'x')@np.array([5*cos(t),5*sin(t),0*t])
     # points=[]
     # for t in np.linspace(-10,10,6000):
     #     points.append(f(t))
     # points=np.array(points).T
     # p=Path_3D(points,type='waypoints')
-    # p=Path_3D(lambda t : 10*(2+sin(10*t))*np.array([cos(t),sin(t),0*t+1]),[-10,10],type='parametric')
-    # p=Path_3D(lambda t : np.array([t**2,-10+t,10+0*t]),[-20,20],type='parametric')
-    # p=Path_3D(lambda t : np.array([cos(6*t),sin(6*t),6*t**2]),[0,10],type='parametric')
-    p=Path_3D(lambda t : np.array([t+5,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
-
-    # p=Path_3D(lambda t : np.array([0.1*t**2+1,5*sin(0.25*t**2),0*t]),[0,15],type='parametric')
-    
-    # t=np.linspace(-10,10,10)
-    # print(R_multi(0.5*t,'x')@(np.array([t,0*t,0*t])).shape)
-
-
+    # f=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(4*t))*np.cos(t),1*(1+0.25*np.sin(4*t))*np.sin(t),0*t+0.5])
+     # p=Path_3D(lambda t : np.array([t**2,-10+t,10+0*t]),[-20,20],type='parametric')
+    # p=Path_3D(lambda t : np.array([cos(6*t),sin(6*t),t**2]),[0,10],type='parametric')
+    # f=lambda t : np.array([3*(1.5+np.sin(6*t))*np.cos(t),3*(1.5+np.sin(6*t))*np.sin(t),0*t+1])
+    # p=Path_3D(f,range=[0,6],type='parametric')
+    # p=Path_3D(lambda t : (2+sin(10*t))*np.array([cos(t),sin(t),0*t+1]),range=[-10,-9],type='parametric')
+    # f=lambda t : np.array([t,-4*t*(t-3),0*t])
+    n=10
+    f=lambda t : np.array([np.cos(t),np.sign(np.sin(t))*(2**n-(2*np.cos(t))**n)**(1/n),0*t+1.5])
+    p=Path_3D(f,range=[0,4*2*pi],type='parametric')
     plot=pg.plot(pen={'color': '#186ff6', 'width': 2},background='w')
-
+    plot.resize(1200, 850)
+    plot.move(300, 115)
     F=p.local_info(p.s)
-    plot.plot(F.X[0],F.X[1],pen={'color': 'blue', 'width': 2})
-    plot.plot(F.s,0.2*F.C,pen={'color': 'red', 'width': 2})
-    # plot.plot(F.s,F.dTr,pen={'color': 'red', 'width': 2})
+    def gauss(x):
+        return np.exp(-x**2/2)/np.sqrt(2*pi)
+    plot.plot(F.X[0],F.X[1],pen={'color': 'green', 'width': 2})
+    # plot.plot(F.s,F.dC,pen={'color': 'blue', 'width': 2})
+    # T=np.linspace(-1,1,100)*2
+    # k=gauss(T)
+    # k=k/np.sum(k)*2
+    # y=np.convolve(F.dC,k,mode='same')
+    # yd=np.abs(F.C[0]+np.cumsum(y*p.ds))
+    # yd=np.sqrt(3/(1e-3+yd))
+    # yd=np.clip(yd,0,1.5)
+    # plot.plot(F.s,yd,pen={'color': 'red', 'width': 2})
+    # plot.plot(F.s,yd,pen={'color': 'red', 'width': 2})
+    # print(np.sum(F.C),np.sum(np.convolve(F.C,k,mode='same')))
+    # plot.plot(F.s,100*(np.abs(F.dC)>20),pen={'color': 'red', 'width': 2})
+    # plot.plot(F.X[0],F.X[1],pen={'color': 'blue', 'width': 2})
+    from scipy.signal import savgol_filter
+   
+    # plot.plot(T,l,pen={'color': 'green', 'width': 2})    
 
 
     plot.showGrid(x=True,y=True)

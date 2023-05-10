@@ -65,7 +65,7 @@ class RobotModeState():
     def main(self):
         rate = rospy.Rate(15)
         while not rospy.is_shutdown():
-            print(self)
+            # print(self)
             self.stateMachine()
             rate.sleep()
 

@@ -114,13 +114,13 @@ class plot2D(QtWidgets.QMainWindow):
         self.setWindowTitle('Plot Window')
 
         # Buttons
-        start_mission = QPushButton(self.graphWidget)
+        reset_data = QPushButton(self.graphWidget)
 
-        start_mission.setText('Test button')
+        reset_data.setText('Reset data')
 
-        start_mission.setGeometry(QtCore.QRect(0, 0, 100, 25))
+        reset_data.setGeometry(QtCore.QRect(0, 0, 100, 25))
 
-        # start_mission.clicked.connect(self.start_recording_mission)
+        reset_data.clicked.connect(self.reset_data)
 
         # Test data
         self.positions = np.zeros((10**4, 6))
@@ -132,7 +132,7 @@ class plot2D(QtWidgets.QMainWindow):
         # Creating the widgets
         self.p = self.graphWidget.addPlot(col=0, row=0)
         self.data_plot = {0: pg.PlotCurveItem(
-            pen=({'color': '#f12828', 'width': 3}), skipFiniteCheck=True, name='0')}
+            pen=({'color': '#f12828', 'width': 3}), skipFiniteCheck=True, name='main')}
         self.N = 3000
         self.values = {0: np.zeros((self.N, 2))}
         self.cursors = {0: 0}
@@ -153,7 +153,7 @@ class plot2D(QtWidgets.QMainWindow):
         self.timer.start()
         self.show()
 
-    def plot(self, x, y, id=0):
+    def plot(self, x, y, id=0,color='navy'):
         if not id in self.data_plot:
             if id == 1:
                 print('hi')
@@ -165,20 +165,27 @@ class plot2D(QtWidgets.QMainWindow):
                 print('hi 2')
             else:
                 self.data_plot[id] = pg.PlotCurveItem(
-                    pen=({'color': 'navy', 'width': 3}), skipFiniteCheck=True, name=str(id))
+                    pen=({'color': color, 'width': 3}), skipFiniteCheck=True, name=str(id))
             self.p.addItem(self.data_plot[id])
             self.values[id] = np.zeros((self.N, 2))
             self.cursors[id] = 0
         if type(x) == np.float64 or type(x) == float or type(y) == np.float64 or type(y) == float:
             self.values[id][self.cursors[id]] = x, y
-            values = self.values[id][:self.cursors[id]]
-            self.data_plot[id].setData(x=values[:, 0], y=values[:, 1])
+
             self.cursors[id] += 1
         else:
             self.data_plot[id].setData(x=x, y=y)
         self.cursors[id] = self.cursors[id] % self.N
 
+    def reset_data(self):
+        for id in self.data_plot:
+            self.values[id] = np.zeros((self.N, 2))
+            self.cursors[id] = 0
+
     def update_plot_data(self):
+        for id in self.data_plot:
+            values = self.values[id][:self.cursors[id]]
+            self.data_plot[id].setData(x=values[:, 0], y=values[:, 1])
         # T=np.linspace(-10,10,4000)
         # for id in self.data_plot:
         # self.data_plot[id].setData(x=T,y=np.cos(T-self.i*0.075))
@@ -291,7 +298,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.point_to_follow.setGLOptions('translucent')
             self.w.addItem(self.point_to_follow)
 
-        params = ['Ke', 'k0', 'k1', 'Ks', 'Kth', 'ν', 'Kc', 'νc']
+        params = ['ν', 'k0', 'k1','Kth']
+        # params = ['Vpath', 'k0', 'k1', 'kpath', 'ν']
         default_values = list(np.load('params.npy'))
         if len(default_values) != len(params):
             default_values = np.zeros(len(params))
@@ -415,15 +423,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_plot_data(self):
         if self.state is not None:
+            
             try:
-                # speed=np.linalg.norm(self.state[3:6])
-                speed = self.pfc.v1
+                speed = np.linalg.norm(self.state[3:6])
                 self.robot_info_label_1.setText('x={x:0.2f} m\ny={y:0.2f} m\nz={z:0.2f} m\ne={error:0.2f} cm\nv={speed:0.2f} m/s'.format(
-                    x=self.state[0], y=self.state[1], z=self.state[2], error=self.pfc.error, speed=speed))
+                    x=self.state[0], y=self.state[1], z=self.state[2], error=self.error, speed=speed))
             except:
-                pass
-                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n'.format(
-                    x=self.state[0], y=self.state[1], z=self.state[2]))
+                speed = np.linalg.norm(self.state[3:6])
+                self.robot_info_label_1.setText('x={x:0.2f}\ny={y:0.2f}\nz={z:0.2f}\n\nv={speed:0.2f} m/s'.format(
+                    x=self.state[0], y=self.state[1], z=self.state[2], speed=speed))
 
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices +
                                      self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
@@ -465,7 +473,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def hover_pub(self):
         self.commands_sender.publish(String('HOVER'))
-    
+
     def land_pub(self):
         self.commands_sender.publish(String('LAND'))
 
@@ -478,7 +486,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data_to_ploty2 = []
         self.data_to_ploty3 = []
 
-    def update_state(self, state, s_pos):
+    def update_state(self, state, s_pos,error):
         self.state = state
         self.positions[self.pos_counter] = state
         self.positions_times[self.pos_counter] = time.time()
@@ -486,6 +494,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vehicle_mesh.position = state[:3]
         self.vehicle_mesh.rotate('XYZ', state[6:9])
         self.pos_counter = (self.pos_counter+1) % (10**4)
+        self.error=error
 
     def sawtooth(self, x):
         return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))

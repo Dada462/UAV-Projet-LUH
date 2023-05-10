@@ -59,8 +59,8 @@ class ActionServer():
             self.server.set_succeeded(self.result)
         self.pfc.ds = 0
         self.pfc.s = 0
-        while self.userInput != 'HOME' and not rospy.is_shutdown():
-            self.user_input_pub.publish(String('HOME'))
+        while self.userInput != 'WAIT' and not rospy.is_shutdown() and not pathInterrupted:
+            self.user_input_pub.publish(String('WAIT'))
             r.sleep()
 
 
