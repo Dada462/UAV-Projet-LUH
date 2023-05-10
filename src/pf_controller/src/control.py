@@ -184,26 +184,15 @@ class PFController():
         
         e1=np.array([0,y1,w1])
         de1=np.array([0,dy1,dw1])
-        # kpath=0.6
         self.error=100*np.linalg.norm(e,ord=np.inf)
-        # print(self.error)
         speed=np.linalg.norm(Vr)
         self.speed=speed
         
-        # vp1=Rtheta@Vr
         s=np.linspace(s,s+k0,50)
-        # ds=np.gradient(s)
         Fahead=self.path_to_follow.local_info(s)
         Cahead=np.max(Fahead.C)
         a=np.sqrt(1/(1e-6+Cahead))
         nu_d=np.clip(nu_d,0.2,a)
-
-        
-        
-        # cmax=self.path_to_follow.max_speed(s)
-        # cmax=np.max(cmax)
-        # smax=np.sqrt(1/(1e-3+cmax))
-        # nu_d=np.clip(nu_d,0.2,smax)
 
         d_path=np.linalg.norm(e1/kpath)
         ve=nu_d*(1-np.tanh(d_path))
@@ -330,6 +319,7 @@ class PFController():
         dVr=dVr+self.adj(wr)@Vr
         dVr=Kth*np.tanh(dVr/Kth)
         return dVr
+    
     def update_state(self,data):
         self.state=np.array([*data.data])
 if __name__ == '__main__':
