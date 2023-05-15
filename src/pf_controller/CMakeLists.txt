@@ -9,8 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_python_setup()
 
 catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES robot_state
+  # INCLUDE_DIRS src
+#  LIBRARIES pf_controller
 #  CATKIN_DEPENDS rospy std_msgs
 #  DEPENDS system_lib
 )

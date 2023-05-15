@@ -5,12 +5,14 @@ from geometry_msgs.msg import TwistStamped,PoseStamped
 import numpy as np
 from scipy.spatial.transform import Rotation
 from time import time
+
 class RobotState():
     def __init__(self):
         self.state=np.zeros(12)
         rospy.init_node('robot_state_listener', anonymous=True)
         rospy.Subscriber("/mavros/local_position/velocity_body", TwistStamped, self.body_velocity_info)
         rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self.local_pose_info)
+        # rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, self.local_pose_info)
         self.pub = rospy.Publisher('/robot_state', Float32MultiArray, queue_size=10)
         self.t0=time()
         self.t1=time()
@@ -39,13 +41,14 @@ class RobotState():
         return np.array([yaw, pitch, roll])
 
     def body_velocity_info(self,data):
+        # print(data)
         u,v,w=data.twist.linear.x,data.twist.linear.y,data.twist.linear.z
         lx,ly,lz=data.twist.angular.x,data.twist.angular.y,data.twist.angular.z
         self.state[3:6]=u,v,w
         self.state[9:12]=lx,ly,lz
         data=Float32MultiArray()
         data.data=self.state
-        print('vel',1000*(time()-self.t0))
+        # print('vel',1000*(time()-self.t0))
         self.t0=time()
         self.pub.publish(data)
 
@@ -59,7 +62,7 @@ class RobotState():
         data=Float32MultiArray()
         data.data=self.state
         self.pub.publish(data)
-        print('pose',1000*(time()-self.t1))
+        # print('pose',1000*(time()-self.t1))
         self.t1=time()
 
     def robot_state_pub(self):
