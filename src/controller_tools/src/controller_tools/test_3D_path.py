@@ -56,6 +56,74 @@ def controller(state):
     return dX
 
 
+
+def LPF_control_3D_v5_PID(state,F,params):
+        
+        # Robot state
+        X = state[0:3]
+        Vr = state[3:6]
+        s = state[-1]
+        wr=state[9:12]
+
+        Rm=np.eye(3)
+        dRm=np.zeros((3,3))
+        
+        # Path properties
+        F=p.local_info(s)
+        Rpath=F.R
+        Rtheta = Rpath.T@Rm
+        # Error and its derivatives
+        e = Rpath.T@(X-F.X)
+        s1, y1, w1 = e
+        S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
+        Vp=Rtheta@Vr
+        ks=2
+        ds=Vp[0]+ks*s1
+        if s<0.05 and ds < -1:
+            ds=0
+        # ds=0
+        
+        # dds=(ds-self.ds)*30
+        dds=0
+        dRpath=ds*F.dR
+        dRtheta=dRpath.T@Rm+Rpath.T@dRm
+        de = Rtheta@Vr-ds*S
+        ds1, dy1,dw1 = de
+        dS=np.array([-F.dC*ds*y1-F.C*dy1, F.dC*ds*s1 +F.C*ds1 -dw1*F.Tr-w1*F.dTr*ds,F.Tr*dy1+F.dTr*ds*y1])
+        error=100*np.linalg.norm(e,ord=np.inf)
+
+        
+        
+        
+        e1=np.array([0,y1,w1])
+        de1=np.array([0,dy1,dw1])
+        vc,k0,k1,Kth=0.5,1.7,2.4,3
+        # vc,k0,k1,Kth=params
+
+        # Slowing down term when highly curved turn is encountered
+        
+        kpath=0.7
+        d_path=np.linalg.norm(e1/kpath)
+        ve=vc*(1-np.tanh(d_path))
+        dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+
+        dde=-k1*np.clip(de,-2,2)-k0*np.clip(e,-1.5,1.5)
+        Vp=Rtheta@Vr
+        dds=0
+        wF=Rpath.T@dRpath
+        wF=adj(np.array([-F.Tr,0,-F.C]))*ds
+        dVp=dde+dds*S+ds*dS+wF@(ds*S+de-Vp)
+        dVp=np.array([0,1,1])*dVp
+        dVp[0]=dve+2*(ve-Vp[0])
+        #np.array([dve+2*(ve-Vp[0]),0,0])
+        
+        # Acceleration commands
+        dVr=Rtheta.T@(dVp-dRtheta@Vr)
+        dVr=dVr+adj(wr)@Vr
+        dVr=Kth*np.tanh(dVr/Kth)
+        ds=1
+        return np.hstack((dVr,ds)),error
+
 def LPF_control_3D(state,F,params):
         X = state[0:3]
         Vr = state[3:6]
@@ -395,7 +463,7 @@ class MainWindow(QtWidgets.QMainWindow):
         global X
         X=X*0
         # X[:3]=np.array([1,1,1])
-        X[-1]=14
+        X[-1]=0
         # X[:3]=p.local_info(X[-1]).X
         beta=pi/2
         gamma=pi/3
@@ -416,14 +484,17 @@ class MainWindow(QtWidgets.QMainWindow):
         global X
         F=self.p.local_info(X[-1])
         pos=F.X.T
-        s1=np.vstack((pos,pos+2*F.s1))
-        y1=np.vstack((pos,pos+2*F.y1))
-        w1=np.vstack((pos,pos+2*F.w1))
+        s1=np.vstack((pos,pos+2*F.T))
+        y1=np.vstack((pos,pos+2*F.N))
+        w1=np.vstack((pos,pos+2*F.B))
+        
+        # y1=np.vstack((pos,pos+2*F.y1))
+        # w1=np.vstack((pos,pos+2*F.w1))
         
         # u=controller(X)
         # u[:3]=5*(u[:3]-X[3:6])
         if not self.pause:
-            u,actual_u=LPF_control_3D_v2(X,self.values,self)
+            u,err=LPF_control_3D_v5_PID(X,self.values,self)
         # self.plotter.plot(time(),u[1])
         # self.plotter.plot(time(),actual_u[1],1)
         # cinput=np.vstack((X[:3],X[:3]+u[:3]))
@@ -433,12 +504,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # u,err=LPF_control_3D_v2(X,F,self.values)
         X[-1]=max(0,X[-1])
         # err=np.linalg.norm(err)
-        self.robot_info.setText('e={error:0.2f}|s={speed:0.2f}|C={C:0.2f}|dC={dC:0.2f}'.format(error=err,speed=speed,C=F.C,dC=F.dC))
+        # self.robot_info.setText('e={error:0.2f}|s={speed:0.2f}|C={C:0.2f}|dC={dC:0.2f}'.format(error=err,speed=speed,C=F.C,dC=F.dC))
         self.sp1.setData(pos=pos)
         self.robot_path.setData(pos=self.r_pos)
         self.s1_arrow.setData(pos=s1)
-        # self.y1_arrow.setData(pos=y1)
-        # self.w1_arrow.setData(pos=w1)
+        self.y1_arrow.setData(pos=y1)
+        self.w1_arrow.setData(pos=w1)
         self.robot.setData(pos=X[:3])
         dt=self.dt
         if not self.pause:
@@ -462,7 +533,10 @@ class MainWindow(QtWidgets.QMainWindow):
 # points=np.array(points).T
 # p=Path_3D(points,type='waypoints')
 # f=lambda t : R(0.15,'x')@np.array([1*np.cos(t),1*np.sin(t),0*t+0.5])
-f=lambda t : np.array([1*(1.5+np.sin(3*t))*np.cos(t),1*(1.5+np.sin(3*t))*np.sin(t),0*t+1])
+# f=lambda t : np.array([1*(1.5+np.sin(3*t))*np.cos(t),1*(1.5+np.sin(3*t))*np.sin(t),0*t+1])
+# f=lambda t : np.array([t+7,1*np.cos(2*pi*t/2.5)+5,np.cos(2*pi*t/3)+3])
+f=lambda t : np.array([cos(t),sin(t),cos(t*2)])
+# f=lambda t : np.array([np.cos(2*pi*t/2.5),np.sin(4*pi*t/2.5),0*np.cos(2*pi*t/3)+3])
 # p=Path_3D(lambda t : np.array([1*cos(0.1*t**2),1*sin(0.1*t**2),2*t]),[0,200],type='parametric')
 # p=Path_3D(lambda t : np.array([t,1*cos(2*pi*t/5),2+0*t]),[0,200],type='parametric')
 p=Path_3D(f,[0,15],type='parametric')
@@ -470,7 +544,7 @@ p=Path_3D(f,[0,15],type='parametric')
 # from time import sleep
 
 F=p.local_info(7.2)
-Rpath=np.vstack((F.s1,F.y1,F.w1)).T
+Rpath=F.R
 e_last = Rpath.T@(-F.X)
 last_ds=0
 t0=time()
@@ -493,7 +567,7 @@ if len(np.load('params_lab.npy'))==nb:
 else:
     values=np.ones(nb)
 
-window=MainWindow(pts,pos,X,['Vpath','k1','kpath','ν'],values,p)
+window=MainWindow(pts,pos,X,['ν','k0','k1','Kth'],values,p)
 
 
 from time import time

@@ -298,8 +298,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.point_to_follow.setGLOptions('translucent')
             self.w.addItem(self.point_to_follow)
 
-        params = ['ν', 'k0', 'k1','Kth']
-        # params = ['Vpath', 'k0', 'k1', 'kpath', 'ν']
+        params = ['νpath', 'k0', 'k1','Kpath','ν','c1','amax'] # V4
+        # params = ['Ke','ν','k0','k1','Kth'] # PID
         default_values = list(np.load('params.npy'))
         if len(default_values) != len(params):
             default_values = np.zeros(len(params))

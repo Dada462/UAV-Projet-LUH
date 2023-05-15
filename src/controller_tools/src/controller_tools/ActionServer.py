@@ -39,7 +39,7 @@ class ActionServer():
             r.sleep()
         self.pfc.init_path(points)
         pathInterrupted = False
-        while self.distance_to_goal > 0.05 and not rospy.is_shutdown():
+        while self.distance_to_goal > 0.1 and not rospy.is_shutdown():
             if self.server.is_preempt_requested() or self.userInput != 'FOLLOWPATH':
                 pathInterrupted = True
                 break
