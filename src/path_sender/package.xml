@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>service_test</name>
+  <name>path_sender</name>
   <version>0.0.0</version>
-  <description>The service_test package</description>
+  <description>The path_sender package</description>
   <maintainer email="donuts@todo.todo">donuts</maintainer>
 
   <license>TODO</license>

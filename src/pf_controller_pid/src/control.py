@@ -37,18 +37,18 @@ class PFController():
         self.imuData=np.zeros(3)
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
         
-        app = QtWidgets.QApplication(sys.argv)
-        self.displayer=MainWindow(self)
+        # app = QtWidgets.QApplication(sys.argv)
+        # self.displayer=MainWindow(self)
         self.sm=RobotModeState()
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
-        # self.p=plot2D()
+        
+        self.main()
+        # ros_thread = threading.Thread(target=self.main,daemon=True)
+        # ros_thread.start()
 
-        ros_thread = threading.Thread(target=self.main,daemon=True)
-        ros_thread.start()
-
-        sys.exit(app.exec_())
+        # sys.exit(app.exec_())
 
     def imuCallback(self,msg):
         self.lastImuData=self.imuData
@@ -70,17 +70,16 @@ class PFController():
         i=0
         self.s=0
         self.ds=0
-        self.I=PID()
-        self.displayer.clickMethod()
+        # self.I=PID()
+        # self.displayer.clickMethod()
+        # self.t0=time()
         s_pos=np.zeros(3)
         self.error=0
-        self.last_dVr=np.zeros(3)
-        self.t0=time()
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos=self.path_to_follow.local_info(self.s).X
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
-            self.displayer.update_state(self.state,s_pos,self.error)
+            # self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 u=self.LPF_control_PID()
                 ############################## Acceleration Topic ##############################
@@ -116,36 +115,13 @@ class PFController():
             rate.sleep()
     
     def init_path(self,points=[]):
-        # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
         if len(points)!=0:
             try:
                 self.path_to_follow=Path_3D(points,type='waypoints')
-                self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
+                # self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
                 self.pathIsComputed=True
             except:
                 print('[ERROR] Path properties were not possible to compute [ERROR]')
-        ############################### Sphere Path ###############################
-        # f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
-        # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
-        # f=lambda t : R(t,'y')@np.array([5,0,0])+np.array([0,0,10])+np.array([0*t,sin(15*t),0*t])
-        # points=[]
-        # for t in np.linspace(-10,20,4000):
-        #     points.append(f(t))
-        # points=np.array(points).T
-        # self.path_to_follow=Path_3D(points,type='waypoints')
-        ############################### Sphere Path ###############################
-       
-        # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/2)+5,0*t+10]),[-10,30],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([t+7,3*cos(2*pi*t/7)+5,2*cos(2*pi*t/3)+10]),[-10,30],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([5*(2+sin(10*t))*cos(t),5*(2+sin(10*t))*sin(t),0*t+10]),[-10,10],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([t,-10+0.01*t**2,0.01*t+10]),[-20,20],type='parametric')
-        # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(t),3*(t+10)+10]),[-10,10],type='parametric')
-        
-        ################################ Real Robot ################################
-        # self.path_to_follow=Path_3D(lambda t : np.array([cos(t),sin(t),0.7+0*t]),[0,10],type='parametric')
-        ################################ Real Robot ################################
         self.s=0
         self.ds=0
 
@@ -172,7 +148,6 @@ class PFController():
         
         Rtheta = Rpath.T@Rm
         
-
         # Error and its derivatives
         e = Rpath.T@(X-F.X)
         s1, y1, w1 = e

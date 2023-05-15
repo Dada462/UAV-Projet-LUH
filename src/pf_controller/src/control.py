@@ -82,7 +82,7 @@ class PFController():
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
-                u=self.LPF_control_3D_PID()
+                u=self.LPF_control_3D_v4()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -259,9 +259,9 @@ class PFController():
         de=Rtheta@Vr-ds*S
         ds1, dy1,dw1 = de
 
-        Vpath,k0,k1,kpath,nu_d,c1,amax=self.displayer.values
-        # Vpath,k0,k1,kpath,nu_d=1.5,1.5,2,0.55,1.5
-
+        # Vpath,k0,k1,kpath,nu_d,c1,amax=self.displayer.values
+        Vpath,k0,k1,kpath,nu_d,c1,amax=0.5,1.5,1.5,0.4,1.5,50,0.5
+        
         
         e=np.array([s1,y1,w1])
         # de=np.array([ds1,dy1,dw1])

@@ -14,7 +14,6 @@ def main():
     client.wait_for_server()
     print('Sending path')
     p=Path()
-   
     
 
     # 1: Line
@@ -56,9 +55,6 @@ def main():
     # p=Path_3D(lambda t : (2+sin(10*t))*np.array([cos(t),sin(t),0*t+1]),range=[-10,-9],type='parametric')
     # f=lambda t : np.array([t,t,0*t])
     # f=lambda t : np.array([np.cos(t),np.sin(t),0*t+1.5])
-    
-   
- 
     # f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
     # f=lambda t : R(t,'y')@np.array([5,0,0])+np.array([0,0,10])+np.array([0*t,sin(15*t),0*t])
@@ -72,8 +68,8 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=flower_range
-    f=flower
+    rng=uturn_range
+    f=uturn
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
     goal = FollowPathGoal(path=p)
