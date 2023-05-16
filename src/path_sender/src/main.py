@@ -1,7 +1,7 @@
 import rospy
 import actionlib
 from uavr_nav_msgs.msg import FollowPathAction,Path,FollowPathGoal
-from geometry_msgs.msg import Pose, Point,Quaternion
+from geometry_msgs.msg import Pose, Point,Quaternion,Twist,Vector3
 from controller_tools.tools import R
 import numpy as np
 from numpy import pi
@@ -75,6 +75,7 @@ def main():
     f=circular
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
+        p.velocities.append(Twist(Vector3(1.69,0,0),Vector3(0,0,69)))
     goal = FollowPathGoal(path=p)
     client.send_goal(goal,feedback_cb=feedback_cb)
     print('Path sent')
