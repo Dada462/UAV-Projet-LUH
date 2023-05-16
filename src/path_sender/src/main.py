@@ -38,8 +38,11 @@ def main():
     obs_av_2=lambda t : np.array([t,A*np.sin(2*pi*t/T),0*t+1.5])
     obs_av_2_range=(0,3)
     
+    # 5: Circular
+    circular=lambda t : np.array([5*np.cos(t)*np.sin(0.5*t),2*np.sin(t),1.5])
+    circular_range=(0,2*pi)
 
-    # 5: Other paths
+    # 6: Other paths
 
 
     flower=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(5*t))*np.cos(t),1*(1+0.25*np.sin(5*t))*np.sin(t),0*t+0.5])
