@@ -82,7 +82,7 @@ class PFController():
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
-                u=self.control_lpf()
+                u,heading=self.control_pid()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -115,13 +115,13 @@ class PFController():
             i+=1
             rate.sleep()
     
-    def init_path(self,points=[]):
+    def init_path(self,points=[],speeds=[],headings=[]):
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
         if len(points)!=0:
             try:
-                self.path_to_follow=Path_3D(points,type='waypoints')
+                self.path_to_follow=Path_3D(points,speeds=speeds,headings=headings,type='waypoints')
                 self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
                 self.pathIsComputed=True
             except:
@@ -270,7 +270,9 @@ class PFController():
         ds1, dy1,dw1 = de
 
         # Vpath,k0,k1,kpath,nu_d,c1,amax=self.displayer.values
-        Vpath,k0,k1,kpath,nu_d,c1,amax=0.5,1.5,1.5,0.4,1.5,50,0.5
+        Vpath,k0,k1,kpath,_,c1,amax=0.5,1.5,1.5,0.4,1.5,50,0.5
+        nu_d=F.speed
+        heading=F.heading
         
         
         e=np.array([s1,y1,w1])
@@ -354,9 +356,9 @@ class PFController():
         dir=dVr
         arrow=np.vstack((pos,pos+3*dir))
         self.displayer.control_output.setData(pos=arrow)
-        return dVr
+        return dVr,heading
 
-    def control_PID(self):
+    def control_pid(self):
         # Ke,k0,k1,Ks,Kth,nu_d,_,vc=self.displayer.values
         
         # Robot state
@@ -412,7 +414,9 @@ class PFController():
         
         e1=np.array([0,y1,w1])
         de1=np.array([0,dy1,dw1])
-        Ke,vc,k0,k1,Kth=2.25,1.5,2,2,3
+        Ke,_,k0,k1,Kth=2.25,1.5,2,2,3
+        vc=F.speed
+        heading=F.heading
         # Ke,vc,k0,k1,Kth=self.displayer.values
         
         # Slowing down term when highly curved turn is encountered
@@ -452,7 +456,7 @@ class PFController():
         self.p.plot(time()-self.t0,y1,'y1','#0df5c0')
         self.p.plot(time()-self.t0,w1,'w1','#0dd5f5')
 
-        return dVr
+        return dVr,heading
     
     def update_state(self,data):
         self.state=np.array([*data.data])
