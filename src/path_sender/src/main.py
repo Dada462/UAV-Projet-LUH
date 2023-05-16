@@ -38,16 +38,11 @@ def main():
     obs_av_2=lambda t : np.array([t,A*np.sin(2*pi*t/T),0*t+1.5])
     obs_av_2_range=(0,3)
     
-<<<<<<< HEAD
-
-    # 5: Other paths
-=======
     # 5: Circular
     circular=lambda t : np.array([5*np.cos(t)*np.sin(0.5*t),2*np.sin(t),1.5])
     circular_range=(0,2*pi)
 
     # 6: Other paths
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
 
 
     flower=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(5*t))*np.cos(t),1*(1+0.25*np.sin(5*t))*np.sin(t),0*t+0.5])
@@ -76,8 +71,8 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=uturn_range
-    f=uturn
+    rng=circular_range
+    f=circular
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
     goal = FollowPathGoal(path=p)

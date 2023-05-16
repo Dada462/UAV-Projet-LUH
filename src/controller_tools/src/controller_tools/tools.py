@@ -308,19 +308,11 @@ class Path_3D():
 
 
 if __name__=='__main__':
-<<<<<<< HEAD
-    # import pyqtgraph as pg
-    # pg.setConfigOptions(antialias=True)
-    # plot=pg.plot(pen={'color': '#0e70ec', 'width': 2},background='w')
-    # plot.resize(1200, 850)
-    # plot.move(300, 115)
-=======
     import pyqtgraph as pg
     pg.setConfigOptions(antialias=True)
     plot=pg.plot(pen={'color': '#0e70ec', 'width': 2},background='w')
     plot.resize(1200, 850)
     plot.move(300, 115)
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     
     # f=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(4*t))*np.cos(t),1*(1+0.25*np.sin(4*t))*np.sin(t),0*t+0.5])
     # p=Path_3D(lambda t : np.array([t**2,-10+t,10+0*t]),[-20,20],type='parametric')
@@ -337,66 +329,35 @@ if __name__=='__main__':
     uturn=lambda t : np.array([1*np.cos(t),np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n),0*t+1.5])
     uturn_range=(0,pi)
     
-<<<<<<< HEAD
-    # 3: Obstacle avoidance 1:
-=======
     # 3: Obstacle avoidance 1
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     def obs_av_1(t):
         b=np.array([0,16,0])
         X=uturn(t)*(t<pi/2)+(2*uturn(pi/2)-uturn(pi-t))*(1.5*pi>t>=pi/2)+(b+uturn(t))*(1.5*pi<=t)
         return X
     obs_av_1_range=(0,2*pi)
 
-<<<<<<< HEAD
-    # 4: Obstacle avoidance 2:
-=======
     # 4: Obstacle avoidance 2
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     T=1
     A=0.8
     obs_av_2=lambda t : np.array([t,A*np.sin(2*pi*t/T),0*t+1.5])
     obs_av_2_range=(0,3)
-<<<<<<< HEAD
-    
-=======
     # 5: Circular
     circular=lambda t : np.array([5*np.cos(t)*np.sin(0.5*t),3*np.sin(t),1.5])
     circular_range=(0,2*pi)
 
     # Other paths
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     # p=Path_3D(f,range=[0,6],type='parametric')
     # p=Path_3D(lambda t : (2+sin(10*t))*np.array([cos(t),sin(t),0*t+1]),range=[-10,-9],type='parametric')
     # f=lambda t : np.array([t,t,0*t])
     # f=lambda t : np.array([np.cos(t),np.sin(t),0*t+1.5])
-<<<<<<< HEAD
-    rng=obs_av_2_range
-    f=obs_av_2
-=======
     
     rng=circular_range
     f=circular
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     points=[]
     for t in np.linspace(*rng,6000):
         points.append(f(t))
     points=np.array(points).T
     p=Path_3D(points,type='waypoints')
-<<<<<<< HEAD
-    print('Lenght:',np.round(p.s_max,2),'m')
-    # p=Path_3D(f,range=[0,2*pi],type='parametric')
-    F=p.local_info(p.s)
-    # V=p.compute_path_properties_PTF()
-    import matplotlib.pyplot as plt
-
-    # plt.plot(F.X[0],F.X[1])
-    # plt.xlim(-10,10)
-    # plt.ylim(-10,10)
-    plt.plot(F.s,F.C)
-    # plt.plot(F.s,p.s_to_s1(p.s)[0])
-    # plt.plot(F.s,p.s_to_dT(p.s).T,c='green')
-=======
     # p=Path_3D(f,range=[0,2*pi],type='parametric')
     F=p.local_info(p.s)
 
@@ -405,7 +366,6 @@ if __name__=='__main__':
     plot.plot(F.X[0],F.X[1],pen={'color': '#0e70ec', 'width': 2})
 
    
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
     s=p.s
     k1=p.s_to_k1(p.s)
     k2=p.s_to_k2(p.s)
@@ -421,19 +381,7 @@ if __name__=='__main__':
 
     Rpath=p.s_to_R(s)[:,:,0]
     dRpath=p.s_to_dR(s)[:,:,2]
-<<<<<<< HEAD
-    # plt.quiver(F.X[0],F.X[1],F.T[0],F.T[1],scale=10)
-    # plt.plot(F.s,dRpath,c='blue')
-    plt.show()
-
-
-    # plot.plot(F.X[0],F.X[1],pen={'color': '#0e70ec', 'width': 4})
-    # plot.showGrid(x=True,y=True)
-    # plot.show()
-    # pg.exec()
-=======
 
     plot.showGrid(x=True,y=True)
     plot.show()
     pg.exec()
->>>>>>> 882754d693cd6e37f43becade41c566e9298bbea
