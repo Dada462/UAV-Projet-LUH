@@ -82,7 +82,7 @@ class PFController():
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
-                u=self.LPF_control_3D_v4()
+                u=self.control_lpf()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -149,8 +149,7 @@ class PFController():
         self.s=0
         self.ds=0
 
-    def LPF_control_3D_v5_PID(self):
-        
+    def LPF_control_v5(self):
         # Robot state
         X = self.state[0:3]
         Vr = self.state[3:6]
@@ -161,69 +160,80 @@ class PFController():
         dRm=Rm@self.adj(wr)
         
         # Path properties
-        F=self.path_to_follow.local_info(s)
-        Rpath=F.R
-        Rtheta = Rpath.T@Rm
-        # Error and its derivatives
-        e = Rpath.T@(X-F.X)
-        s1, y1, w1 = e
-        # S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1]) # FSF
-        S=np.array([F.k2*w1+F.k1*y1+1,-F.k1*s1,-F.k2*s1]) # PTF
-        Vp=Rtheta@Vr
-        ks=2
-        ds=Vp[0]+ks*s1
-        if s<0.05 and ds < -1:
-            ds=0
-        
-        dds=(ds-self.ds)*30
-        self.ds=ds
-        dRpath=ds*F.dR
-        dRtheta=dRpath.T@Rm+Rpath.T@dRm
-        de = Rtheta@Vr-ds*S
-        ds1, dy1,dw1 = de
-        # dSdt=np.array([-F.dC*ds*y1-F.C*dy1, F.dC*ds*s1 +F.C*ds1 -dw1*F.Tr-w1*F.dTr*ds,F.Tr*dy1+F.dTr*ds*y1])
-        self.error=100*np.linalg.norm(e,ord=np.inf)
+        # F=self.path_to_follow.local_info(s)
+        # Rpath=F.R
+        # Rtheta = Rpath.T@Rm
+        # # Error and its derivatives
+        # e = Rpath.T@(X-F.X)
+        # s1, y1, w1 = e
+        # # S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
+        # S=np.array([F.k2*w1+F.k1*y1+1,-F.k1*s1,-F.k2*s1]) # PTF
+        # Vp=Rtheta@Vr
+        # ks=2
+        # ds=Vp[0]+ks*s1
+        # if s<0.05 and ds < -1:
+        #     ds=0
+        # self.ds=ds
+        # dRpath=ds*F.dR
+        # dRtheta=dRpath.T@Rm+Rpath.T@dRm
+        # de = Rtheta@Vr-ds*S
+        # ds1, dy1,dw1 = de
+        # # dS=np.array([-F.dC*ds*y1-F.C*dy1, F.dC*ds*s1 +F.C*ds1 -dw1*F.Tr-w1*F.dTr*ds,F.Tr*dy1+F.dTr*ds*y1])
 
-        e1=np.array([0,y1,w1])
-        de1=np.array([0,dy1,dw1])
-        # vc,k0,k1,Kth=0.5,1.7,2.4,3
-        vc,k0,k1,Kth=self.displayer.values
+        # self.error=100*np.linalg.norm(e,ord=np.inf)
         
-        # Slowing down term when highly curved turn is encountered
         
-        kpath=0.55
-        d_path=np.linalg.norm(e1/kpath)
-        ve=vc*(1-np.tanh(d_path))
-        dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+        
+        # e1=np.array([0,y1,w1])
+        # de1=np.array([0,dy1,dw1])
+        # Ke,vc,k0,k1,Kth=2.25,1.5,2,2,3
+        # # Ke,vc,k0,k1,Kth=self.displayer.values
+        
+        # # Slowing down term when highly curved turn is encountered
+        
+        # # Look ahead curvature
+        # s=np.linspace(s,s+1.5,50)
+        # Fahead=self.path_to_follow.local_info(s)
+        # Cahead=np.max(Fahead.C)
+        # a=np.sqrt(1.5/(1e-6+Cahead))
+        # vc=np.clip(vc,0.2,a)
 
-        # dde=-k1*np.clip(de,-3,3)-k0*np.clip(e,-2,2)
-        dde=-k1*de-k0*e
-        Vp=Rtheta@Vr
-        # dds=0
-        # wF=Rpath.T@dRpath
-        # a=self.adj_inv(wF)@np.array([-F.Tr,0,-F.C])*ds
-        # b=np.linalg.norm(self.adj_inv(wF))
-        # c=np.linalg.norm(np.array([-F.Tr,0,-F.C])*ds)
-        # wF=self.adj(np.array([-F.Tr,0,-F.C]))*ds
-        # dVp=dde+dds*S+dSdt+wF@(ds*S+de-Vp)
-        dVp=dde
-        dVp[0]=dve+2*(ve-Vp[0])
+        # kpath=0.55
+        # d_path=np.linalg.norm(e1/kpath)
+        # ve=vc*(1-np.tanh(d_path))
+        # dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+
+        # d_path1=np.linalg.norm(e/kpath)
+        # t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)
+        # print(t[0])
+
+        # dVp=np.array([dve+2*(ve-Vp[0]),0,0])-k1*np.clip(de1,-2,2)-k0*np.clip(e1,-1.5,1.5)+t
         
-        # Acceleration commands
-        dVr=Rtheta.T@(dVp-dRtheta@Vr)
+        # # Acceleration commands
+        # dVr=Rtheta.T@(dVp-dRtheta@Vr)
         # dVr=dVr+self.adj(wr)@Vr
-        dVr=Kth*np.tanh(dVr/Kth)
+        # dVr=Kth*np.tanh(dVr/Kth)
 
-        pos=F.X
-        s1=np.vstack((pos,pos+3*Rpath[:,0]))
-        y1=np.vstack((pos,pos+3*Rpath[:,1]))
-        w1=np.vstack((pos,pos+3*Rpath[:,2]))
-        self.displayer.s1_arrow.setData(pos=s1)
-        self.displayer.y1_arrow.setData(pos=y1)
-        self.displayer.w1_arrow.setData(pos=w1)
-        return dVr
+        
+        z=X[2]
+        zd=5
 
-    def LPF_control_3D_v4(self):
+        dz=Vr[2]
+        T,zmin,zmax,k0,k1=self.displayer.values
+        # T=0.25
+        zd=zmax*(np.sin(pi*(time()-self.t0)/T)+1)+zmin
+        thrust=0.5+k0*(zd-z)+k1*(-dz)
+        # thrust=zd
+        
+        self.p.plot(time()-self.t0,dz,'z','#f5300d')
+        # self.p.plot(time()-self.t0,zd,'zd','#49f50d')
+        # self.p.plot(time()-self.t0,thrust,'thrust','#0dd5f5')
+
+        
+        return thrust
+        
+
+    def control_lpf(self):
         state=self.state
         X = state[0:3]
         Vr = state[3:6]
@@ -346,7 +356,7 @@ class PFController():
         self.displayer.control_output.setData(pos=arrow)
         return dVr
 
-    def LPF_control_3D_PID(self):
+    def control_PID(self):
         # Ke,k0,k1,Ks,Kth,nu_d,_,vc=self.displayer.values
         
         # Robot state
@@ -418,10 +428,10 @@ class PFController():
         d_path=np.linalg.norm(e1/kpath)
         ve=vc*(1-np.tanh(d_path))
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
-
+        if ((self.path_to_follow.s_max-self.s)<1):
+            ve=(self.path_to_follow.s_max-self.s)-0.5*Vp[0]
         d_path1=np.linalg.norm(e/kpath)
         t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)
-        print(t[0])
 
         dVp=np.array([dve+2*(ve-Vp[0]),0,0])-k1*np.clip(de1,-2,2)-k0*np.clip(e1,-1.5,1.5)+t
         

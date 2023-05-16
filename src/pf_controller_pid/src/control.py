@@ -63,16 +63,13 @@ class PFController():
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
         f=30
         rate = rospy.Rate(f)
         i=0
         self.s=0
         self.ds=0
-        # self.I=PID()
         # self.displayer.clickMethod()
-        # self.t0=time()
         s_pos=np.zeros(3)
         self.error=0
         while not rospy.is_shutdown():
@@ -81,7 +78,7 @@ class PFController():
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             # self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
-                u=self.LPF_control_PID()
+                u=self.control_pid()
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -126,7 +123,7 @@ class PFController():
         self.ds=0
 
 
-    def LPF_control_PID(self):
+    def control_pid(self):
         
         # Robot state
         X = self.state[0:3]
@@ -185,6 +182,8 @@ class PFController():
         d_path=np.linalg.norm(e1/kpath)
         ve=vc*(1-np.tanh(d_path))
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
+        if ((self.path_to_follow.s_max-self.s)<1):
+            ve=(self.path_to_follow.s_max-self.s)-0.5*Vp[0]
 
         d_path1=np.linalg.norm(e/kpath)
         t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)
