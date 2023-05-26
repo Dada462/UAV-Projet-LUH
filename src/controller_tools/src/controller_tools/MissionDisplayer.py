@@ -5,7 +5,6 @@ import sys
 from datetime import datetime
 import time
 from numpy import pi
-from pyqtgraph.Qt import QtCore
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 from PyQt5.QtGui import QPainter, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLineEdit, QLabel
@@ -76,31 +75,33 @@ class RobotMesh():
 class GLViewWidget_Modified(gl.GLViewWidget):
     def __init__(self, parent=None, devicePixelRatio=None, rotationMethod='euler'):
         super().__init__(parent, devicePixelRatio, rotationMethod)
-        self.pressed_keys = set()
-        self.keyboard = [0, 0, 0, 0, 0, 0]
+        # self.pressed_keys = set()
+        # self.keyboard = [0, 0, 0, 0, 0, 0]
+        self.key_ids=[Qt.Key_Z,Qt.Key_S,Qt.Key_Q,Qt.Key_D,Qt.Key_A,Qt.Key_E,Qt.Key_F,Qt.Key_G]
+        self.keyboard = np.zeros(len(self.key_ids))
 
     def evalKeyState(self):
         pass
 
-    def keyPressEvent(self, event):
-        self.pressed_keys.add(event.key())
-        key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
-                   Qt.Key_Right, Qt.Key_G, Qt.Key_H]
-        keys = {key_ids[i]: i for i in range(len(key_ids))}
-        for k in self.pressed_keys:
-            if k in keys:
-                self.keyboard[keys[k]] = 1
-            if k == Qt.Key_Return or k == Qt.Key_Enter:
-                self.clickMethod()
-                self.update_values()
+    # def keyPressEvent(self, event):
+    #     self.pressed_keys.add(event.key())
+    #     key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
+    #                Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+    #     keys = {key_ids[i]: i for i in range(len(key_ids))}
+    #     for k in self.pressed_keys:
+    #         if k in keys:
+    #             self.keyboard[keys[k]] = 1
+    #         if k == Qt.Key_Return or k == Qt.Key_Enter:
+    #             self.clickMethod()
+    #             self.update_values()
 
-    def keyReleaseEvent(self, event):
-        self.pressed_keys.discard(event.key())
-        key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
-                   Qt.Key_Right, Qt.Key_G, Qt.Key_H]
-        keys = {key_ids[i]: i for i in range(len(key_ids))}
-        if event.key() in keys:
-            self.keyboard[keys[event.key()]] = 0
+    # def keyReleaseEvent(self, event):
+    #     self.pressed_keys.discard(event.key())
+    #     key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
+    #                Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+    #     keys = {key_ids[i]: i for i in range(len(key_ids))}
+    #     if event.key() in keys:
+    #         self.keyboard[keys[event.key()]] = 0
 
 
 class plot2D(QtWidgets.QMainWindow):
@@ -153,7 +154,7 @@ class plot2D(QtWidgets.QMainWindow):
         self.timer.start()
         self.show()
 
-    def plot(self, x, y, id=0,color='navy'):
+    def plot(self, x, y, id=0, color='navy'):
         if not id in self.data_plot:
             if id == 1:
                 print('hi')
@@ -214,6 +215,8 @@ class MainWindow(QtWidgets.QMainWindow):
         gx.setSpacing(1, 1)
         self.w.addItem(gx)
         self.w.addItem(axis)
+
+        
 
         # r=Rotation.from_euler('ZYX',(45,0,0),degrees=True).as_matrix()
         # verts=(verts-vcenter)@r.T+vcenter
@@ -286,11 +289,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.path.setGLOptions('opaque')
             self.point_to_follow = gl.GLScatterPlotItem(
                 size=0.25, color=(52/255, 244/255, 76/255, 1), pxMode=False)
+            self.velodyne = gl.GLScatterPlotItem(
+                size=0.05, color=(243/255, 25/255, 11/255, 0.5), pxMode=False)
+            self.velodyne.setGLOptions('opaque')
             self.point_to_follow.setGLOptions('translucent')
             # self.path.setData(pos=self.pfc.path_to_follow.points[:,:3])
 
             self.w.addItem(self.path)
             self.w.addItem(self.point_to_follow)
+            self.w.addItem(self.velodyne)
         else:
             # Path
             self.point_to_follow = gl.GLScatterPlotItem(
@@ -299,7 +306,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.w.addItem(self.point_to_follow)
 
         # params = ['νpath', 'k0', 'k1','Kpath','ν','c1','amax'] # V4
-        params = ['T','zmin','zmax','k0','k1'] # Thrust test        
+        params = ['T', 'zmin', 'zmax', 'k0', 'k1']  # Thrust test
         # params = ['Ke','ν','k0','k1','Kth'] # PID
         default_values = list(np.load('params.npy'))
         if len(default_values) != len(params):
@@ -311,13 +318,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.control_output = gl.GLLinePlotItem(
             width=3, color=(0, 0, 1, 1), glOptions='opaque')
         self.w.addItem(self.control_output)
-
+        
+        # self.key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
+        #            Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+        self.key_ids=[Qt.Key_Z,Qt.Key_S,Qt.Key_Q,Qt.Key_D,Qt.Key_A,Qt.Key_E,56,53]
+        self.keyboard = np.zeros(len(self.key_ids))
+        self.pressed_keys = set()
         self.timer = QtCore.QTimer()
         self.timer.setInterval(75)
         self.timer.timeout.connect(self.update_plot_data)
         self.timer.start()
-        self.pressed_keys = set()
-        self.keyboard = [0, 0, 0, 0, 0, 0]
 
         self.s1_arrow = gl.GLLinePlotItem(
             width=3, color=(0, 0, 1, 0.8), glOptions='opaque')
@@ -381,10 +391,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event):
         self.pressed_keys.add(event.key())
-        key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
-                   Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+        key_ids=self.key_ids
         keys = {key_ids[i]: i for i in range(len(key_ids))}
         for k in self.pressed_keys:
+            # self.keyboard=[k==Qt.Key_Z,k==Qt.Key_S,k==Qt.Key_Q,k==Qt.Key_D,k==Qt.Key_E,k==Qt.Key_A]
             if k in keys:
                 self.keyboard[keys[k]] = 1
             if k == Qt.Key_Return or k == Qt.Key_Enter:
@@ -393,8 +403,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def keyReleaseEvent(self, event):
         self.pressed_keys.discard(event.key())
-        key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
-                   Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+        # key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,Qt.Key_Right, Qt.Key_G, Qt.Key_H]
+        key_ids=self.key_ids
         keys = {key_ids[i]: i for i in range(len(key_ids))}
         if event.key() in keys:
             self.keyboard[keys[event.key()]] = 0
@@ -424,7 +434,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def update_plot_data(self):
         if self.state is not None:
-            
             try:
                 speed = np.linalg.norm(self.state[3:6])
                 self.robot_info_label_1.setText('x={x:0.2f} m\ny={y:0.2f} m\nz={z:0.2f} m\ne={error:0.2f} cm\nv={speed:0.2f} m/s'.format(
@@ -437,6 +446,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices +
                                      self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter, :3])
+            self.point_to_follow.setData(pos=self.s_pos)
+            self.velodyne.setData(pos=self.vel)
             self.i += 1
             self.keyboard = self.w.keyboard
             # t=self.i/20
@@ -477,6 +488,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def land_pub(self):
         self.commands_sender.publish(String('LAND'))
+        self.commands_sender.publish(String('KEYBOARD'))
 
     def reset_mission_data(self):
         self.pfc.s = 0
@@ -487,15 +499,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data_to_ploty2 = []
         self.data_to_ploty3 = []
 
-    def update_state(self, state, s_pos,error):
+    def update_state(self, state, s_pos, error,vel):
         self.state = state
+        self.s_pos=s_pos
+        self.vel=vel
         self.positions[self.pos_counter] = state
         self.positions_times[self.pos_counter] = time.time()
-        self.point_to_follow.setData(pos=s_pos)
         self.vehicle_mesh.position = state[:3]
         self.vehicle_mesh.rotate('XYZ', state[6:9])
         self.pos_counter = (self.pos_counter+1) % (10**4)
-        self.error=error
+        self.error = error
 
     def sawtooth(self, x):
         return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))

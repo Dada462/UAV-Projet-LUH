@@ -15,6 +15,9 @@ def main():
     print('Sending path')
     p=Path()
     
+    # 1: Line
+    liney=lambda t : np.array([0*t,t,0*t])+np.array([0,0,0.4])
+    liney_range=(0,24)
 
     # 1: Line
     line=lambda t : np.array([t,t,0*t])+np.array([-1,1,1.5])
@@ -71,11 +74,11 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=circular_range
-    f=circular
+    rng=liney_range
+    f=liney
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        p.velocities.append(Twist(Vector3(1.69,0,0),Vector3(0,0,69)))
+        p.velocities.append(Twist(Vector3(1,0,0),Vector3(0,0,69)))
     goal = FollowPathGoal(path=p)
     client.send_goal(goal,feedback_cb=feedback_cb)
     print('Path sent')

@@ -6,11 +6,9 @@ from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stamped,Quaternion
 from mavros_msgs.msg import PositionTarget,AttitudeTarget
 from numpy import cos, sin, tanh, pi
-import threading
 from controller_tools.tools import Path_3D,R,sawtooth
 from controller_tools.MissionDisplayer import MainWindow, plot2D
 from pyqtgraph.Qt import QtWidgets
-import sys
 from scipy.spatial.transform import Rotation
 from scipy import signal
 from scipy.linalg import expm,logm

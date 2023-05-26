@@ -16,9 +16,15 @@ from scipy import signal
 from scipy.linalg import expm,logm
 from controller_tools.RobotStateMachine import RobotModeState
 from controller_tools.ActionServer import ActionServer
+from controller_tools.Map import Map
 from sensor_msgs.msg import Imu
 from time import time
 from scipy.signal import square as sq
+from sensor_msgs.msg import PointCloud2
+import ros_numpy as rn
+
+
+
 
 class PID():
     def __init__(self):
@@ -36,6 +42,7 @@ class PFController():
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state)
         self.imuData=np.zeros(3)
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
+        rospy.Subscriber('/velodyne', PointCloud2, self.velodyneCallback)
         
         app = QtWidgets.QApplication(sys.argv)
         self.displayer=MainWindow(self)
@@ -43,13 +50,16 @@ class PFController():
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
-        self.p=plot2D()
-
+        # self.p=plot2D()
+        
         ros_thread = threading.Thread(target=self.main,daemon=True)
         ros_thread.start()
 
         sys.exit(app.exec_())
 
+    def velodyneCallback(self,msg):
+        self.vel=rn.point_cloud2.pointcloud2_to_xyz_array(msg)
+    
     def imuCallback(self,msg):
         self.lastImuData=self.imuData
         self.imuData=np.array([msg.linear_acceleration.x,msg.linear_acceleration.y,msg.linear_acceleration.z])
@@ -63,7 +73,7 @@ class PFController():
     def main(self):
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
-        # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
+        attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
         f=30
         rate = rospy.Rate(f)
@@ -72,23 +82,104 @@ class PFController():
         self.ds=0
         self.I=PID()
         self.displayer.clickMethod()
-        s_pos=np.zeros(3)
+        s_pos=vel=np.zeros(3)
         self.error=0
         self.last_dVr=np.zeros(3)
         self.t0=time()
+        self.m=Map(50,500)
         while not rospy.is_shutdown():
+            Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False)
             if self.pathIsComputed:
                 s_pos=self.path_to_follow.local_info(self.s).X
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
-            self.displayer.update_state(self.state,s_pos,self.error)
-            if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
+            vel=self.vel
+            distances=np.linalg.norm(vel,axis=1)
+            t=(distances>0.4)
+            vel=vel[t]
+            distances=distances[t]
+            
+
+            # print(vel.shape)
+            # kvel=0.0015
+            # rep=vel.T/distances*1/(1+0.01*distances**10)
+            # rep=-kvel*np.sum(rep.T,axis=0)
+
+            ############## Fluid flow ##############
+            U=1.5
+            a=3
+            x,y,z=vel.T
+            
+            rep=np.array([U*(1-a**2*(x**2-y**2)/((x**2+y**2)**2)),-(U*a)**2*x*y/((x**2+y**2)**2),0*x])
+            rep=rep/(1+distances**2)
+            kvel=0.00015
+            rep=kvel*np.sum(rep,axis=1)
+            # rep=np.zeros(3)
+            ############## Fluid flow ##############
+
+           
+            
+            vel1=Rm.apply(vel)
+            vel1=vel1+self.state[:3]
+            # t=vel1[:,2]>0.1
+            # vel1=vel1[t]
+            
+            # vel=vel[t]
+            # distances=distances[t]
+            # kvel=0.0015
+            # rep=vel.T/distances**3
+            # rep=-kvel*np.sum(rep.T,axis=0)
+            dir=rep
+            dir=Rm.apply(rep)
+            arrow=np.vstack((self.state[:3],self.state[:3]+dir))
+            self.displayer.control_output.setData(pos=arrow)
+            # self.m(vel1.T)
+            # if i%90==0:
+                # vel2=self.m.array_to_points()
+            # map3D=np.where((self.m.data==1))
+            self.displayer.update_state(self.state,s_pos,self.error,vel1)
+            if self.sm.userInput=='KEYBOARD':
+                u=self.displayer.keyboard
+                u=np.array([[1,-1,0,0,0,0,0,0],
+                            [0,0,1,-1,0,0,0,0],
+                            [0,0,0,0,0,0,1,-1],
+                            [0,0,0,0,1,-1,0,0]])@u
+                # msg=AttitudeTarget()
+                # msg.thrust=dz
+                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # w=self.state[6:9]
+                # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
+                # wd=0.15*D@(u[[0,1,3]])
+                # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
+                # attitude_pub.publish(msg)
+
+                msg=TwistStamped()
+                u[:3]=Rm.apply(u[:3])
+                dz=1.5*(0.5-self.state[2])-1*self.state[5]
+                msg.twist.linear=Vector3(*1*u[:2]+dir[:2],dz)
+                msg.twist.angular=Vector3(0,0,3.5*u[3])
+                speed_pub.publish(msg)
+            elif self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 u,heading=self.control_pid()
+                u=u+rep
+                # c=u+rep
+                # if np.linalg.norm(u)<0.4:
+                #     c=R(0.5,'z')@c
+                # u=c
+                # col=np.dot(u,rep)/(1e-6+np.linalg.norm(u)*np.linalg.norm(rep))
+                # col=np.clip(col,-1,1)
+                # theta=np.arccos(col)/pi*180
+                # print(theta)
+                # if theta>20:
+                #     u=u+rep
+                # else:
+                #     u=R(0.15,'z')@u
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
                 command.coordinate_frame = PositionTarget.FRAME_BODY_NED
                 command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
                 command.acceleration_or_force=Vector3(*u)
+                # command.yaw=heading
                 accel_command_pub.publish(command)
                 ############################## Acceleration Topic ##############################        
             elif self.sm.userInput=='HOME':
@@ -109,7 +200,6 @@ class PFController():
             elif self.sm.state=='HOVERING' or self.sm.state=='STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s=self.ds=0
-
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
             i+=1
@@ -430,7 +520,7 @@ class PFController():
 
         kpath=0.55
         d_path=np.linalg.norm(e1/kpath)
-        ve=vc*(1-np.tanh(d_path))
+        ve=vc*(1-np.tanh(d_path))+0.3
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
         if ((self.path_to_follow.s_max-self.s)<1):
             ve=(self.path_to_follow.s_max-self.s)-0.5*Vp[0]
@@ -449,12 +539,12 @@ class PFController():
         # r=Rotation.from_rotvec(F.w1*angle)
         # dVr=r.apply(dVr)
 
-        self.p.plot(time()-self.t0,F.C,'C','#f5300d')
-        self.p.plot(time()-self.t0,F.dC,'dC','#f5af0d')
+        # self.p.plot(time()-self.t0,F.C,'C','#f5300d')
+        # self.p.plot(time()-self.t0,F.dC,'dC','#f5af0d')
         
-        self.p.plot(time()-self.t0,s1,'s1','#49f50d')
-        self.p.plot(time()-self.t0,y1,'y1','#0df5c0')
-        self.p.plot(time()-self.t0,w1,'w1','#0dd5f5')
+        # self.p.plot(time()-self.t0,s1,'s1','#49f50d')
+        # self.p.plot(time()-self.t0,y1,'y1','#0df5c0')
+        # self.p.plot(time()-self.t0,w1,'w1','#0dd5f5')
 
         return dVr,heading
     
