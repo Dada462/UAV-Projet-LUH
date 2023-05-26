@@ -1,3 +1,0 @@
-s10846-019-01085-z.pdf
-kinematic a Fixed Wing Lyapunov Controller Based 3D for Path Following Kinematic Controller.pdf
-Geometric 3D PFC for a Fixed-Wing UAV on SO(3).pdf
