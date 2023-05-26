@@ -64,7 +64,8 @@ Q=np.array([[1.15,-1.15],
             [1.15,-1.15]])
 
 # T=np.linspace(pi/2,3*pi/2,1)
-T=np.linspace(pi/2,3*pi/2,1)
+T=np.linspace(-pi/2,pi/2,100)
+T=np.linspace(pi/2,3*pi/2,100)
 
 
 nb=0.1
@@ -72,17 +73,19 @@ nb=0.1
 # Q=np.array([np.cos(T),np.sign(np.sin(T))*(1-np.cos(T)**nb)**(1/nb)])
 theta=T
 # r=1/(np.abs(np.cos(theta)+np.sin(theta))+np.abs(np.cos(theta)-np.sin(theta)))
-r=0.5
+r=1
 # t1=np.linspace(0,2*pi,100)
 # plt.plot(1.5*np.cos(t1),1.5*np.sin(t1),color='orangered',linewidth=3)
 Q=np.array([r*np.cos(theta)-0.5,r*np.sin(theta)])
+# Q=np.zeros((2,1))
+# plt.plot(np.cos(np.linspace(0,2*pi,100)),np.sin(np.linspace(0,2*pi,100)),color='orangered')
 
 def rep(X,q):
     # return (X-q).T/(0.01+norm(X-q,axis=1)**3)
     U=1
     a=1.5
     x,y=(X-q).T
-    return U*(1-a**2*(x**2-y**2)/((x**2+y**2)**2)),-8*U*a**2*x*y/((x**2+y**2)**2)
+    return U*(1-a**2*(x**2-y**2)/((x**2+y**2)**2)),-2*(U*a)**2*x*y/((x**2+y**2)**2)
 
 x = np.linspace(-3.1,3.1,100)
 y = np.linspace(-3.1,3.1,100)
