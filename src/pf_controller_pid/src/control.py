@@ -70,6 +70,7 @@ class PFController():
         # self.displayer.clickMethod()
         s_pos=np.zeros(3)
         self.error=0
+        last_heading=0
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos=self.path_to_follow.local_info(self.s).X
@@ -77,13 +78,15 @@ class PFController():
             # self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 u,heading=self.control_pid()
-                print(heading)
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
                 command.coordinate_frame = PositionTarget.FRAME_BODY_NED
                 command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
+                command.type_mask = command.type_mask+PositionTarget.IGNORE_YAW
                 command.acceleration_or_force=Vector3(*u)
+                command.yaw_rate=0.5*sawtooth(heading-self.state[8])
+                last_heading=heading
                 accel_command_pub.publish(command)
                 ############################## Acceleration Topic ##############################        
             elif self.sm.userInput=='HOME':
@@ -97,7 +100,7 @@ class PFController():
                 wait_pos=self.path_to_follow.local_info(self.path_to_follow.s_max).X
                 command=PoseStamped()
                 command.pose.position=Point(*wait_pos)
-                q=Rotation.from_euler('XYZ',self.state[6:9],degrees=True).as_quat()
+                q=Rotation.from_euler('XYZ',[0,0,last_heading],degrees=False).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
                 self.ds=0
@@ -176,6 +179,7 @@ class PFController():
         Fahead=self.path_to_follow.local_info(s)
         Cahead=np.max(Fahead.C)
         a=np.sqrt(1.5/(1e-6+Cahead))
+        a=np.clip(a,0.2,1.75)
         vc=np.clip(vc,0.2,a)
 
         kpath=0.55
@@ -183,7 +187,8 @@ class PFController():
         ve=vc*(1-np.tanh(d_path))
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
         if ((self.path_to_follow.s_max-self.s)<1):
-            ve=(self.path_to_follow.s_max-self.s)-0.5*Vp[0]
+            ve=np.clip(self.path_to_follow.s_max-self.s,-0.5,0.5)
+            dve=-np.clip(ds,-0.5,0.5)*(np.abs(ds)<=0.5)
 
         d_path1=np.linalg.norm(e/kpath)
         t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)

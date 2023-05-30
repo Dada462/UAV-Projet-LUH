@@ -4,7 +4,6 @@ from uavr_nav_msgs.msg import FollowPathAction, FollowPathFeedback, FollowPathRe
 from std_msgs.msg import String
 from numpy import array, inf
 
-
 class ActionServer():
     def __init__(self, pfc=None):
         self.feedback = FollowPathFeedback()
@@ -71,5 +70,5 @@ class ActionServer():
 
 
 if __name__ == '__main__':
-    rospy.init_node('test')
+    rospy.init_node('ActionServer')
     s = ActionServer()

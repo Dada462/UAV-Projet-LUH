@@ -325,15 +325,15 @@ if __name__ == '__main__':
     # f=lambda t : np.array([3*(1.5+np.sin(6*t))*np.cos(t),3*(1.5+np.sin(6*t))*np.sin(t),0*t+1])
 
     # 1: Line
-    def line(t): return np.array([t, t, 0*t])+np.array([-1, 1, 1.5])
-    line_range = (-2, 4)
+    def line(t): return np.array([2*t, -t, 0*t+1.25])
+    line_range = (-1, 1)
     # 2: U-Turn
-    n = 6
-    r = 4
-
-    def uturn(t): return np.array(
-        [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
-    uturn_range = (0, pi)
+    n=6
+    a,b=1,4
+    uturn=lambda t: np.array([-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t),0*t+1.5])
+    uturn_range= (0,pi)
+    # def uturn(t): return np.array(
+    #     [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
 
     # 3: Obstacle avoidance 1
     def obs_av_1(t):
@@ -360,8 +360,8 @@ if __name__ == '__main__':
     # f=lambda t : np.array([t,t,0*t])
     # f=lambda t : np.array([np.cos(t),np.sin(t),0*t+1.5])
 
-    rng = circular_range
-    f = circular
+    rng = uturn_range
+    f = uturn
     points = []
     for t in np.linspace(*rng, 6000):
         points.append(f(t))

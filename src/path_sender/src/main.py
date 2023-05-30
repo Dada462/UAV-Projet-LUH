@@ -9,6 +9,88 @@ from numpy import pi
 def feedback_cb(msg):
     print('Feedback received:', msg)
 
+
+from scipy.special import comb
+
+def get_bezier_parameters(X, Y, degree=3):
+    """ Least square qbezier fit using penrose pseudoinverse.
+
+    Parameters:
+
+    X: array of x data.
+    Y: array of y data. Y[0] is the y point for X[0].
+    degree: degree of the Bézier curve. 2 for quadratic, 3 for cubic.
+
+    Based on https://stackoverflow.com/questions/12643079/b%C3%A9zier-curve-fitting-with-scipy
+    and probably on the 1998 thesis by Tim Andrew Pastva, "Bézier Curve Fitting".
+    """
+    if degree < 1:
+        raise ValueError('degree must be 1 or greater.')
+
+    if len(X) != len(Y):
+        raise ValueError('X and Y must be of the same length.')
+
+    if len(X) < degree + 1:
+        raise ValueError(f'There must be at least {degree + 1} points to '
+                         f'determine the parameters of a degree {degree} curve. '
+                         f'Got only {len(X)} points.')
+
+    def bpoly(n, t, k):
+        """ Bernstein polynomial when a = 0 and b = 1. """
+        return t ** k * (1 - t) ** (n - k) * comb(n, k)
+        #return comb(n, i) * ( t**(n-i) ) * (1 - t)**i
+
+    def bmatrix(T):
+        """ Bernstein matrix for Bézier curves. """
+        return np.matrix([[bpoly(degree, t, k) for k in range(degree + 1)] for t in T])
+
+    def least_square_fit(points, M):
+        M_ = np.linalg.pinv(M)
+        return M_ * points
+
+    T = np.linspace(0, 1, len(X))
+    M = bmatrix(T)
+    points = np.array(list(zip(X, Y)))
+    
+    final = least_square_fit(points, M).tolist()
+    final[0] = [X[0], Y[0]]
+    final[len(final)-1] = [X[len(X)-1], Y[len(Y)-1]]
+    return final
+
+def bernstein_poly(i, n, t):
+    """
+     The Bernstein polynomial of n, i as a function of t
+    """
+    return comb(n, i) * ( t**(n-i) ) * (1 - t)**i
+
+def bezier_curve(points, nTimes=50):
+    """
+       Given a set of control points, return the
+       bezier curve defined by the control points.
+
+       points should be a list of lists, or list of tuples
+       such as [ [1,1], 
+                 [2,3], 
+                 [4,5], ..[Xn, Yn] ]
+        nTimes is the number of time steps, defaults to 1000
+
+        See http://processingjs.nihongoresources.com/bezierinfo/
+    """
+
+    nPoints = len(points)
+    xPoints = np.array([p[0] for p in points])
+    yPoints = np.array([p[1] for p in points])
+
+    t = np.linspace(0.0, 1.0, nTimes)
+
+    polynomial_array = np.array([ bernstein_poly(i, nPoints-1, t) for i in range(0, nPoints)   ])
+
+    xvals = np.dot(xPoints, polynomial_array)
+    yvals = np.dot(yPoints, polynomial_array)
+
+    return xvals, yvals
+
+
 def main():
     client = actionlib.SimpleActionClient('followPath', FollowPathAction)
     client.wait_for_server()
@@ -16,17 +98,15 @@ def main():
     p=Path()
     
     # 1: Line
-    liney=lambda t : np.array([0*t,t,0*t])+np.array([0,0,0.4])
-    liney_range=(0,24)
-
-    # 1: Line
-    line=lambda t : np.array([t,t,0*t])+np.array([-1,1,1.5])
-    line_range=(0,6)
+    def line(t): return np.array([2*t, -t, 0*t+0.5])
+    line_range = (0, 2)
     # 2: U-Turn
     n=6
-    r=4
-    uturn=lambda t : np.array([1*np.cos(t),np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n),0*t+1.5])
-    uturn_range=(0,pi)
+    a,b=1,4
+    uturn=lambda t: R(-pi/2,'z')@np.array([-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t)-1,0*t+0.5])
+    uturn_range= (0,pi)
+    uturn=lambda t: np.array([-a*np.cos(t),+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),0*t+0.5])
+    uturn_range= (0,pi)
     
     # 3: Obstacle avoidance 1
     def obs_av_1(t):
@@ -74,11 +154,24 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=liney_range
-    f=liney
+    rng=circular_range
+    f=circular
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        p.velocities.append(Twist(Vector3(1,0,0),Vector3(0,0,69)))
+        p.velocities.append(Twist(Vector3(1.5,0,0),Vector3(0,0,pi/2)))
+
+    # # Spiral
+    # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,-0],[-1,1,1,1.25,.75,0.5,-.75]
+    # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]
+    # data = get_bezier_parameters(xpoints, ypoints, degree=3)
+    # xvals, yvals = bezier_curve(data, nTimes=6000)
+    # yvals=-np.array(np.flip(xvals))
+    # xvals=np.array(np.flip(yvals))
+    # for i in range(6000):
+    #     # print(xvals[i],yvals[i],1.25)
+    #     p.poses.append(Pose(Point(xvals[i],yvals[i],0.5),Quaternion()))
+    #     p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+    
     goal = FollowPathGoal(path=p)
     client.send_goal(goal,feedback_cb=feedback_cb)
     print('Path sent')
