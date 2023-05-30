@@ -3,4 +3,5 @@ build/
 devel/
 src/CMakeLists.txt
 src/uav_launch
+.catkin_workspace
 **/__pycache__/
