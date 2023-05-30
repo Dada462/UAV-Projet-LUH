@@ -1,0 +1,22 @@
+uint8 TO_POINT=0
+uint8 TO_START=1
+uint8 CIRCLE=2
+
+uint8 type
+geometry_msgs/PoseStamped goal
+float32 min_obstacle_dist
+float32 max_velocity
+float32 max_length
+float32 max_planning_time
+
+---
+
+uint8 SUCCESS=0
+uint8 ERR_NO_REASON=1
+uint8 ERR_OBSTACLE_DIST=2
+uint8 ERR_MAX_LENGTH=3
+uint8 ERR_INVALID_GOAL=4
+uint8 TIMEOUT=255
+
+uint8 result
+uavr_nav_msgs/Path path

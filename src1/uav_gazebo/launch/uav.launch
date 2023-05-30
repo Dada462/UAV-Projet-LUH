@@ -1,0 +1,19 @@
+<launch>
+  <env name="GAZEBO_MODEL_PATH" value="$(find uav_gazebo)/models" />
+
+  <!-- We resume the logic in empty_world.launch, changing only the name of the world to be launched -->
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(find uav_gazebo)/worlds/test_space.world"/>
+    <arg name="verbose" value="True" />
+    <!-- more default parameters can be changed here -->
+  </include>
+
+  <!-- Spawn a robot into Gazebo -->
+  <node name="spawn_sdf" pkg="gazebo_ros" type="spawn_model" output="screen" args="-file $(find uav_gazebo)/models/uav_ardupilot/model.sdf -sdf -x 0 -y 0 -z 0.1 -model uav_ardupilot" />
+  
+  <!-- Static Transform from velodyne to base_link -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="velodyne_base_link_broadcaster" args="0 0 0.3 0 0 0 1 base_link velodyne" />
+</launch>
+
+<!-- rosrun gazebo_ros spawn_model -file /home/daniel/repos/ardupilot_gazebo/models/iris_with_ardupilot/model.sdf -sdf -x 0 -y 0 -z 1 -model uav -->
+<!-- rosrun tf2_ros static_transform_publisher 0 0 0 0 0 0 1 velodyne base_link -->

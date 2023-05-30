@@ -1,0 +1,20 @@
+#goal parameters
+uavr_nav_msgs/Path path
+
+---
+
+#result parameter
+uint8 SUCCESS=0
+uint8 USER_TOOK_OVER=1
+uint8 PATH_BLOCKED=2
+uint8 LOW_BATTERY=3
+uint8 UNKNOWN_ERROR=255
+
+uint8 result
+float32 distance_to_goal
+
+---
+
+#process update parameters
+float32 distance_to_goal
+float32 closest_obstacle

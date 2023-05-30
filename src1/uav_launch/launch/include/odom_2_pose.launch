@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="odom_2_pose" type="odom_2_pose.py" name="odom_2_pose_node" output="screen" />
+</launch>

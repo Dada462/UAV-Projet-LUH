@@ -1,0 +1,18 @@
+#goal parameters
+duration delay
+float32 agl                 # height Above Ground Level
+
+---
+
+#result parameter
+uint8 SUCCESS=0
+uint8 USER_TOOK_OVER=1
+uint8 LOW_BATTERY=2
+uint8 UNKNOWN_ERROR=255
+
+uint8 result
+
+---
+
+#process update
+float32 current_agl

@@ -1,0 +1,11 @@
+<launch>
+	<node pkg="path_calculation" type="path_planner" name="path_planner" output="screen">
+		
+		<!--Octomap used for path calculation-->
+		<remap from="map_in" to="/octomap_binary" />
+	
+		<!--UAV position used for path calculation-->
+		<remap from="current_pose" to="/lio_sam/vision_pose/pose" />
+
+	</node>
+</launch>

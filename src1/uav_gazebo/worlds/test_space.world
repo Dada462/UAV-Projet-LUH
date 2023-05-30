@@ -1,0 +1,46 @@
+<?xml version="1.0" ?>
+<sdf version="1.4">
+  <world name="default">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://gas_station</uri>
+      <name>gas_station</name>
+      <pose>-2.0 7.0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder0</name>
+      <pose>3 -0.78 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder1</name>
+      <pose>6 0.655 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder2</name>
+      <pose>9 -0.53 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder3</name>
+      <pose>12 0.405 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder4</name>
+      <pose>15 -0.28 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://drc_practice_blue_cylinder</uri>
+      <name>cylinder5</name>
+      <pose>18 0 0 0 0 0</pose>
+    </include>
+  </world>
+</sdf>

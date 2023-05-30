@@ -1,0 +1,15 @@
+<launch>
+    <!-- EKF GPS-->
+    <node pkg="robot_localization" type="ekf_localization_node" name="ekf_gps" respawn="true">
+        <remap from="odometry/filtered" to="odometry/navsat" />
+    </node>
+
+    <!-- Navsat -->
+    <node pkg="robot_localization" type="navsat_transform_node" name="navsat" respawn="true">
+        <!-- <rosparam param="datum">[42.35893211, -71.09345588, 0.0, world, base_link]</rosparam> -->
+        <remap from="imu/data" to="/mavros/imu/data" />
+        <remap from="gps/fix" to="/mavros/global_position/raw/fix" />
+        <remap from="odometry/filtered" to="odometry/navsat" />
+    </node>
+
+</launch>

@@ -1,0 +1,49 @@
+<launch>
+    <arg name="record" default="false" doc="whether all messages should be logged via rosbag" />
+    <arg name="locsrc" default="slam" doc="which localization source is used for EK3 lane 1 (mocap, slam)" />
+    <arg name="use_reference" default="false" doc="whether to use mocap_optitrack to provide additional reference to SLAM" />
+    <arg name="lidar" default="horizontal" doc="Specify Lidar mount. Two mounts are available: 
+                                                    one fixed horizontal mount ('horizontal'), 
+                                                    one horizontal mount with fixred 15 degree pitch angle ('pitched'). 
+                                                If no Lidar is mounted, set 'false'" />
+    <arg name="radar" default="true" doc="whether or not to launch radar" />
+    <arg name="rangefinder" default="true" doc="whether or not to launch rangefinder" />
+
+    <include file="$(find uav_launch)/launch/include/mavlink.launch" />
+    
+    <include file="$(find uav_launch)/launch/include/laserscan.launch" 
+             if="$(eval arg('lidar') == 'horizontal' or arg('lidar') == 'pitched')" />
+
+    <include file="$(find uav_launch)/launch/include/rangefinder.launch"
+             if="$(arg rangefinder)" />
+    
+    <include file="$(find indurad_driver)/launch/full_driver.launch" 
+             if="$(arg radar)" />
+
+    <group if="$(eval arg('locsrc') == 'mocap')" >
+        <include file="$(find uav_launch)/launch/include/mocap_optitrack.launch" />
+    </group>
+    
+    <!-- <include file="$(find uav_launch)/launch/include/navsat-odom.launch" /> -->
+    
+
+    <group if="$(eval arg('locsrc') == 'slam')" >
+        <include file="$(find uav_launch)/launch/include/lio-sam.launch" />
+        <include file="$(find uav_launch)/launch/include/tf2pose.launch" />
+    </group>
+
+    <group if="$(arg use_reference)" >
+        <include file="$(find uav_launch)/launch/include/mocap_optitrack.launch" >
+            <arg name="reference" value="$(arg use_reference)" />
+        </include>
+        <node pkg="mocap2slam" name="mocap2slam_node" type="mocap2slam_node" output="screen" />
+    </group>
+    
+    <include file="$(find uav_launch)/launch/include/transform.launch" >
+        <arg name="mocap" value="$(eval arg('locsrc') == 'mocap')" />
+        <arg name="lidar_mount" value="$(arg lidar)" />
+    </include>
+
+    <include file="$(find uav_launch)/launch/record.launch" 
+             if="$(arg record)"/>
+</launch>
