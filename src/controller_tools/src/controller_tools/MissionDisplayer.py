@@ -287,6 +287,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self.path = gl.GLLinePlotItem(
                 color='#3486F4', width=3, antialias=True)
             self.path.setGLOptions('opaque')
+            self.oa_path = gl.GLLinePlotItem(
+                color='#f3a60b', width=3, antialias=True)
+            self.oa_path.setGLOptions('opaque')
             self.point_to_follow = gl.GLScatterPlotItem(
                 size=0.25, color=(52/255, 244/255, 76/255, 1), pxMode=False)
             self.velodyne = gl.GLScatterPlotItem(
@@ -296,6 +299,7 @@ class MainWindow(QtWidgets.QMainWindow):
             # self.path.setData(pos=self.pfc.path_to_follow.points[:,:3])
 
             self.w.addItem(self.path)
+            self.w.addItem(self.oa_path)
             self.w.addItem(self.point_to_follow)
             self.w.addItem(self.velodyne)
         else:

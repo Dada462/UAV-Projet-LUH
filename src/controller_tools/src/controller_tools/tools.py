@@ -51,33 +51,32 @@ class pathInfo():
 
 class Path_3D():
     def __init__(self, *args, **kwargs):
-        if 'type' not in kwargs:
-            raise ValueError(
-                'You must specity a type, either type=\'parametric\' or \'waypoints\'')
-        if kwargs['type'] == 'parametric':
-            f = args[0]
-            if 'range' in kwargs:
-                values_range = kwargs['range']
+        if len(args)!=0:
+            if 'type' not in kwargs:
+                raise ValueError(
+                    'You must specity a type, either type=\'parametric\' or \'waypoints\'')
+            if kwargs['type'] == 'parametric':
+                f = args[0]
+                if 'range' in kwargs:
+                    values_range = kwargs['range']
+                else:
+                    values_range = [-10, 10]
+                t = np.linspace(*values_range, 6000)
+                points = f(t)
+                self.points = points.T
+            elif kwargs['type'] == 'waypoints':
+                points = args[0]
+                self.points = points.T
+            if 'speeds' not in kwargs:
+                self.speeds = np.ones(len(points[0]))*0.5
             else:
-                values_range = [-10, 10]
-            t = np.linspace(*values_range, 6000)
-            points = f(t)
-            self.points = points.T
-        elif kwargs['type'] == 'waypoints':
-            points = args[0]
-            self.points = points.T
-        if 'speeds' not in kwargs:
-            self.speeds = np.ones(len(points[0]))*0.5
-        else:
-            self.speeds = kwargs['speeds']
-        if 'headings' not in kwargs:
-            self.headings = np.zeros(len(points[0]))
-        else:
-            self.headings = kwargs['headings']
-        t0 = time()
-        # self.compute_path_properties()
-        self.compute_path_properties_PTF()
-        print(time()-t0)
+                self.speeds = kwargs['speeds']
+            if 'headings' not in kwargs:
+                self.headings = np.zeros(len(points[0]))
+            else:
+                self.headings = kwargs['headings']
+            # self.compute_path_properties()
+            self.compute_path_properties_PTF()
 
     def __call__(self, s):
         return self.local_info(s)

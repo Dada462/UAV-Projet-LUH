@@ -1,0 +1,16 @@
+<launch>
+
+    <arg name="project" default="lio_sam"/>
+
+    <rosparam file="$(find uav_launch)/config/lio_sam/params.yaml" command="load" />
+    <!-- <node pkg="scan_transformer" type="scan_transformer_node" name="scan_transformer" output="screen" respawn="true"> -->
+        <!-- <remap from="~/input" to="/velodyne_points"/> -->
+        <!-- <remap from="~/output" to="/velodyne_rect"/> -->
+    <!-- </node> -->
+    
+    <node pkg="$(arg project)" type="$(arg project)_imuPreintegration"   name="$(arg project)_imuPreintegration"    output="screen" 	respawn="true"/>
+    <node pkg="$(arg project)" type="$(arg project)_imageProjection"     name="$(arg project)_imageProjection"      output="screen"     respawn="true"/>
+    <node pkg="$(arg project)" type="$(arg project)_featureExtraction"   name="$(arg project)_featureExtraction"    output="screen"     respawn="true"/>
+    <node pkg="$(arg project)" type="$(arg project)_mapOptmization"      name="$(arg project)_mapOptmization"       output="screen"     respawn="true"/>
+     
+</launch>

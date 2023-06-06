@@ -97,6 +97,17 @@ def main():
     print('Sending path')
     p=Path()
     
+    # Stuff for obs. avoidance
+    liney=lambda t : np.array([0*t,-t,0*t])+np.array([0,0,0.4])
+    liney_range=(0,24)
+
+    linex=lambda t : np.array([-t,0*t,0*t])+np.array([0,0,0.4])
+    linex_range=(0,15)
+
+    half_circle=lambda t : np.array([1*np.cos(t)-3,1*np.sin(t),0*t+0.4])
+    half_circle_range=(0,pi)
+    
+
     # 1: Line
     def line(t): return np.array([2*t, -t, 0*t+0.5])
     line_range = (0, 2)
@@ -154,12 +165,12 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=circular_range
-    f=circular
+    rng=liney_range
+    f=liney
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        p.velocities.append(Twist(Vector3(1.5,0,0),Vector3(0,0,pi/2)))
-
+        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,pi)))
+    # p.poses=np.flip(p.poses)
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,-0],[-1,1,1,1.25,.75,0.5,-.75]
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]

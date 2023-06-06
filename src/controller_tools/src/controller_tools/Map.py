@@ -7,6 +7,7 @@ class Map:
         self.map_size = map_size
         self.data = np.zeros((self.map_size, self.map_size,self.map_size), dtype=np.uint8)
         self.discretization_block_size = real_map_size/map_size  # discretization of the map for the graph (in pixels)
+        self.p=np.zeros((self.map_size, self.map_size,self.map_size,3), dtype=np.uint8)
 
     def X_to_Map(self, X):
         X = np.floor(X/self.discretization_block_size+0.5).astype(int)-self.map_size//2
