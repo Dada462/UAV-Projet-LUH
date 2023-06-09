@@ -103,7 +103,7 @@ class Path_3D():
             else:
                 B = B/np.linalg.norm(B)
                 theta = np.arccos(T[:, i]@T[:, i+1])
-                r = Rotation.from_rotvec(theta*B).as_matrix()
+                r = Rotation.from_rotvec(theta*B).as_dcm()
                 N[:, i+1] = r@N[:, i]
             N[:, i+1] = N[:, i+1]/np.linalg.norm(N[:, i+1])
 

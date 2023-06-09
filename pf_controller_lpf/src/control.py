@@ -129,7 +129,7 @@ class PFController():
         dt = 1/30
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         dRm = Rm@self.adj(wr)
 
         X = X+3*dt*Rm@Vr
@@ -184,10 +184,10 @@ class PFController():
         Vp = -Vpath*np.tanh(e1/kpath)+np.array([ve, 0, 0])
 
         Rd = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         data = Rd@self.imuData
         Rd1 = Rotation.from_euler(
-            'XYZ', [0, 0, self.state[8]], degrees=False).as_matrix()
+            'XYZ', [0, 0, self.state[8]], degrees=False).as_dcm()
         data = Rd1.T@data
         data[2] = data[2]-9.81
 

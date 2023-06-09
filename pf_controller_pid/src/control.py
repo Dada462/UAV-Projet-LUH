@@ -125,7 +125,7 @@ class PFController():
         wr = self.state[9:12]
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         dRm = Rm@self.adj(wr)
 
         # Path properties
