@@ -474,6 +474,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.pfc.s = 0
         self.positions = self.positions*0
         # self.pfc.PID.I=0
+        self.pos_counter=0
         self.data_to_plotx = []
         self.data_to_ploty1 = []
         self.data_to_ploty2 = []

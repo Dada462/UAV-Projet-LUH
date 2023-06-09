@@ -110,6 +110,7 @@ class PFController():
             rate.sleep()
 
     def init_path(self, points=[], speeds=[], headings=[]):
+        self.pathIsComputed=False
         if len(points) != 0:
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')

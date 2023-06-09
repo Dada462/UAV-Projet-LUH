@@ -69,6 +69,7 @@ class ActionServer():
             print('[SUCCES] The path was successfully followed')
             self.result.result = 0
             self.server.set_succeeded(self.result)
+        # self.pfc.pathIsComputed=False
         self.pfc.ds = 0
         self.pfc.s = 0
         while self.userInput != 'WAIT' and not rospy.is_shutdown() and not pathInterrupted:
