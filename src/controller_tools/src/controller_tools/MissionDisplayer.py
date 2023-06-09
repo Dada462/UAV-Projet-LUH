@@ -217,7 +217,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # r=Rotation.from_euler('ZYX',(45,0,0),degrees=True).as_matrix()
         # verts=(verts-vcenter)@r.T+vcenter
 
-        self.vehicle_mesh = RobotMesh(np.diag([0.6, 0.6, 0.35]))
+        # self.vehicle_mesh = RobotMesh(np.diag([0.6, 0.6, 0.35]))
+        self.vehicle_mesh = RobotMesh(0.25*np.eye(3))
         self.vehicle = gl.GLMeshItem(vertexes=self.vehicle_mesh.vertices,
                                      faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors, smooth=False)
         self.w.addItem(self.vehicle)
@@ -339,13 +340,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(self.s1_arrow)
         self.w.addItem(self.y1_arrow)
         self.w.addItem(self.w1_arrow)
-        # if __name__!='__main__':
-        #     xrange=[np.min(self.pfc.path_to_follow.points[:,0]),np.max(self.pfc.path_to_follow.points[:,0])]
-        #     yrange=[np.min(self.pfc.path_to_follow.points[:,1]),np.max(self.pfc.path_to_follow.points[:,1])]
-        #     range=np.min([xrange[0],yrange[0]]),np.max([xrange[1],yrange[1]])
-        #     self.w.setCameraPosition()
-        #     self.w.setXRange(*range)
-        #     self.w.setYRange(*range)
         self.show()
 
     def create_params_boxes(self):
@@ -437,6 +431,7 @@ class MainWindow(QtWidgets.QMainWindow):
                                      self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter, :3])
             self.path.setData(pos=self.path_points)
+            self.point_to_follow.setData(pos=self.s_pos)
             self.velodyne.setData(pos=self.vel)
             self.i += 1
             self.keyboard = self.w.keyboard

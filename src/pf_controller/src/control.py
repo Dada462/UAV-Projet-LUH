@@ -133,7 +133,7 @@ class PFController():
 
                 msg=TwistStamped()
                 u[:3]=Rm.apply(u[:3])
-                dz=1.5*(0.5-self.state[2])-1*self.state[5]
+                dz=1.5*(1.5-self.state[2])-1*self.state[5]
                 msg.twist.linear=Vector3(*1*u[:2],dz)
                 msg.twist.angular=Vector3(0,0,3.5*u[3])
                 speed_pub.publish(msg)

@@ -98,7 +98,7 @@ def main():
     p=Path()
     
     # Stuff for obs. avoidance
-    liney=lambda t : np.array([0*t,t,0*t])+np.array([0,0,0.4])
+    liney=lambda t : np.array([0*t,-t,0*t])+np.array([0,0,0.4])
     liney_range=(0,24)
 
     linex=lambda t : np.array([-t,0*t,0*t])+np.array([0,0,0.4])
