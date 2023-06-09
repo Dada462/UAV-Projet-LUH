@@ -116,27 +116,27 @@ class PFController():
             # print(1/(time()-self.t0))
             # self.t0=time()
             if self.sm.userInput=='KEYBOARD':
-                pass
-                # u=self.displayer.keyboard
-                # u=np.array([[1,-1,0,0,0,0,0,0],
-                #             [0,0,1,-1,0,0,0,0],
-                #             [0,0,0,0,0,0,1,-1],
-                #             [0,0,0,0,1,-1,0,0]])@u
-                # # msg=AttitudeTarget()
-                # # msg.thrust=dz
-                # # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                # # w=self.state[6:9]
-                # # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-                # # wd=0.15*D@(u[[0,1,3]])
-                # # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
-                # # attitude_pub.publish(msg)
+                # pass
+                u=self.displayer.keyboard
+                u=np.array([[1,-1,0,0,0,0,0,0],
+                            [0,0,1,-1,0,0,0,0],
+                            [0,0,0,0,0,0,1,-1],
+                            [0,0,0,0,1,-1,0,0]])@u
+                # msg=AttitudeTarget()
+                # msg.thrust=dz
+                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # w=self.state[6:9]
+                # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
+                # wd=0.15*D@(u[[0,1,3]])
+                # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
+                # attitude_pub.publish(msg)
 
-                # msg=TwistStamped()
-                # u[:3]=Rm.apply(u[:3])
-                # dz=1.5*(0.5-self.state[2])-1*self.state[5]
-                # msg.twist.linear=Vector3(*1*u[:2],dz)
-                # msg.twist.angular=Vector3(0,0,3.5*u[3])
-                # speed_pub.publish(msg)
+                msg=TwistStamped()
+                u[:3]=Rm.apply(u[:3])
+                dz=1.5*(0.5-self.state[2])-1*self.state[5]
+                msg.twist.linear=Vector3(*1*u[:2],dz)
+                msg.twist.angular=Vector3(0,0,3.5*u[3])
+                speed_pub.publish(msg)
             elif self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 OA=self.oa(self.state,self.sOA,self.vel,self.s)
                 if OA:
