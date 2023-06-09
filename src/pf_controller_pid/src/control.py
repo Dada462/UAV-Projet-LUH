@@ -16,7 +16,7 @@ class PID():
     def __init__(self):
         self.data = 0
 
-    def __call__(self, data, bound):
+    def __call__(self, data, bound=np.inf):
         if bound <= 0:
             raise ValueError('Bound must be positive')
         self.data = self.data+data
@@ -30,17 +30,11 @@ class PFController():
         self.imuData = np.zeros(3)
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
 
-        # app = QtWidgets.QApplication(sys.argv)
-        # self.displayer=MainWindow(self)
         self.sm = RobotModeState()
         self.pathAction = ActionServer(self)
         self.pathIsComputed = False
         self.init_path()
         self.main()
-        # ros_thread = threading.Thread(target=self.main,daemon=True)
-        # ros_thread.start()
-
-        # sys.exit(app.exec_())
 
     def imuCallback(self, msg):
         self.lastImuData = self.imuData
@@ -66,7 +60,6 @@ class PFController():
         i = 0
         self.s = 0
         self.ds = 0
-        # self.displayer.clickMethod()
         s_pos = np.zeros(3)
         self.error = 0.
         last_heading = 0
@@ -75,7 +68,6 @@ class PFController():
                 s_pos = self.path_to_follow.local_info(self.s).X
                 self.pathAction.distance_to_goal = np.linalg.norm(
                     s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
-            # self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_pid()
                 ############################## Acceleration Topic ##############################
@@ -196,18 +188,6 @@ class PFController():
         dVr = Rtheta.T@(dVp-dRtheta@Vr)
         dVr = dVr+self.adj(wr)@Vr
         dVr = Kth*np.tanh(dVr/Kth)
-
-        # c1,amax=self.displayer.values[-2:]
-        # angle=np.tanh(F.dC/c1)*amax
-        # r=Rotation.from_rotvec(F.w1*angle)
-        # dVr=r.apply(dVr)
-
-        # self.p.plot(time()-self.t0,F.C,'C','#f5300d')
-        # self.p.plot(time()-self.t0,F.dC,'dC','#f5af0d')
-
-        # self.p.plot(time()-self.t0,s1,'s1','#49f50d')
-        # self.p.plot(time()-self.t0,y1,'y1','#0df5c0')
-        # self.p.plot(time()-self.t0,w1,'w1','#0dd5f5')
 
         return dVr, heading
 

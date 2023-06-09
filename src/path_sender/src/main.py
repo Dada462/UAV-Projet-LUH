@@ -116,8 +116,9 @@ def main():
     a,b=1,4
     uturn=lambda t: R(-pi/2,'z')@np.array([-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t)-1,0*t+0.5])
     uturn_range= (0,pi)
-    uturn=lambda t: np.array([-a*np.cos(t),+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),0*t+0.5])
-    uturn_range= (0,pi)
+    
+    # uturn=lambda t: np.array([-a*np.cos(t),+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),0*t+0.5])
+    # uturn_range= (0,pi)
     
     # 3: Obstacle avoidance 1
     def obs_av_1(t):
@@ -165,11 +166,11 @@ def main():
     # f=lambda t : R(0.1*t,'x')@(np.array([5*np.cos(t),5*np.sin(t),0*t]))+np.array([0,0,15])
     # f=lambda t : np.array([2*(1.5+np.sin(3.5*t))*np.cos(t),2*(1.5+np.sin(3.5*t))*np.sin(t),0*t+5])
     
-    rng=liney_range
-    f=liney
+    rng=circular_range
+    f=circular
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+        p.velocities.append(Twist(Vector3(2,0,0),Vector3(0,0,0)))
     # p.poses=np.flip(p.poses)
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,-0],[-1,1,1,1.25,.75,0.5,-.75]

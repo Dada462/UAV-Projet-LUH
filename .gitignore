@@ -5,3 +5,5 @@ devel/
 src/CMakeLists.txt
 .catkin_workspace
 **/__pycache__/
+*.fuse
+*.pyc

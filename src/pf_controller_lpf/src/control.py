@@ -16,7 +16,7 @@ class PID():
     def __init__(self):
         self.data = 0
 
-    def __call__(self, data, bound):
+    def __call__(self, data, bound=np.inf):
         if bound <= 0:
             raise ValueError('Bound must be positive')
         self.data = self.data+data
@@ -30,17 +30,11 @@ class PFController():
         self.imuData = np.zeros(3)
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
 
-        # app = QtWidgets.QApplication(sys.argv)
-        # self.displayer=MainWindow(self)
         self.sm = RobotModeState()
         self.pathAction = ActionServer(self)
         self.pathIsComputed = False
         self.init_path()
         self.main()
-        # ros_thread = threading.Thread(target=self.main,daemon=True)
-        # ros_thread.start()
-
-        # sys.exit(app.exec_())
 
     def imuCallback(self, msg):
         self.lastImuData = self.imuData
@@ -66,7 +60,6 @@ class PFController():
         i = 0
         self.s = 0
         self.ds = 0
-        # self.displayer.clickMethod()
         s_pos = np.zeros(3)
         self.error = 0.
         last_heading = 0
@@ -75,7 +68,6 @@ class PFController():
                 s_pos = self.path_to_follow.local_info(self.s).X
                 self.pathAction.distance_to_goal = np.linalg.norm(
                     s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
-            # self.displayer.update_state(self.state,s_pos,self.error)
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_lpf()
                 ############################## Acceleration Topic ##############################
@@ -182,7 +174,7 @@ class PFController():
         a = np.clip(a, 0.25, 1.75)
         nu_d = np.clip(nu_d, 0.25, a)
 
-        vplin = (Rtheta@Vr)[0]
+        # vplin = (Rtheta@Vr)[0]
         d_path = np.linalg.norm(e1/kpath)
         ve = nu_d*(1-np.tanh(d_path))
         dve = -nu_d/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)

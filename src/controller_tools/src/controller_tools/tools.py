@@ -2,9 +2,7 @@ import numpy as np
 from numpy.linalg import norm
 from numpy import pi, cos, sin
 from scipy import interpolate
-from scipy.linalg import expm
 from scipy.spatial.transform import Rotation
-from time import time
 
 
 def sawtooth(x):
@@ -27,23 +25,6 @@ def R(theta, which='2D'):
     return r
 
 
-def R_multi(theta, which='2D'):
-    if which == '2D':
-        r = np.array([[cos(theta), -sin(theta)], [sin(theta), cos(theta)]])
-    elif which == 'x':
-        r = np.array([[np.ones_like(theta), np.zeros_like(theta), np.zeros_like(theta)], [np.zeros_like(theta), cos(theta), -sin(theta)],
-                      [np.zeros_like(theta), sin(theta), cos(theta)]])
-    elif which == 'y':
-        r = np.array([[cos(theta), np.zeros_like(theta), -sin(theta)],
-                      [np.zeros_like(theta), np.ones_like(theta), np.zeros_like(theta)], [sin(theta), np.zeros_like(theta), cos(theta)]])
-    elif which == 'z':
-        r = np.array([[cos(theta), - sin(theta), np.zeros_like(theta)],
-                      [sin(theta), cos(theta), np.zeros_like(theta)],
-                      [np.zeros_like(theta), np.zeros_like(theta), np.ones_like(theta)]])
-    r = np.transpose(r.T, [0, 2, 1])
-    return r
-
-
 class pathInfo():
     def __init__(self):
         pass
@@ -51,7 +32,7 @@ class pathInfo():
 
 class Path_3D():
     def __init__(self, *args, **kwargs):
-        if len(args)!=0:
+        if len(args) != 0:
             if 'type' not in kwargs:
                 raise ValueError(
                     'You must specity a type, either type=\'parametric\' or \'waypoints\'')
@@ -115,22 +96,6 @@ class Path_3D():
         N = np.zeros_like(T)
         N[:, 0] = V0
 
-        # Bc=np.cross(T[:,:-1],T[:,1:],axis=0)
-        # z=np.linalg.norm(Bc,axis=0)<1e-9
-        # z=np.where(z==1)[0]
-        # Bc=Bc/(1e-6+np.linalg.norm(Bc,axis=0))
-        # print(Bc)
-        # theta=np.sum(T[:,:-1]*T[:,1:],axis=0)
-        # theta=np.clip(theta,-1,1)
-        # theta=np.arccos(theta)
-        # r=Rotation.from_rotvec((theta*Bc).T)
-        # N[:,:-1]=Bc
-        # N[:,1:]=r.apply(N[:,:-1].T).T
-        # # a=r.apply(N[:,:-1].T).T
-        # # print(a.shape)
-        # for i in z:
-        #     N[i+1:]=N[i:len(N)-1]
-
         for i in range(len(T.T)-1):
             B = np.cross(T[:, i], T[:, i+1])
             if np.linalg.norm(B) < 1e-7:
@@ -158,7 +123,6 @@ class Path_3D():
         dR = np.transpose(dR, axes=(0, 2, 1))
 
         # Coefficients k1 and k2 from the Parallel Transport Frame Equation & curvature and torsion from SFF
-
         y1 = np.gradient(T, axis=1)
         y1 = y1/(norm(y1, axis=0)+1e-6)
         w1 = np.cross(T, y1, axis=0)
@@ -266,17 +230,15 @@ class Path_3D():
         self.s_to_dy1 = s_to_dy1
         self.s_to_dw1 = s_to_dw1
 
-        def gauss(x):
-            return np.exp(-x**2/2)/np.sqrt(2*pi)
+        # def gauss(x):
+        #     return np.exp(-x**2/2)/np.sqrt(2*pi)
 
-        T = np.linspace(-1, 1, 100)*2
-        k = gauss(T)
-        k = k/np.sum(k)*2
-        y = np.convolve(dC, k, mode='same')
-        yd = np.abs(C[0]+np.cumsum(y*ds))
-        self.max_speed = interpolate.interp1d(s, yd)
-        # yd=np.sqrt(3/(1e-3+yd))
-        # yd=np.clip(yd,0,1.5)
+        # T = np.linspace(-1, 1, 100)*2
+        # k = gauss(T)
+        # k = k/np.sum(k)*2
+        # y = np.convolve(dC, k, mode='same')
+        # yd = np.abs(C[0]+np.cumsum(y*ds))
+        # self.max_speed = interpolate.interp1d(s, yd)
 
     def local_info(self, s):
         local_property = pathInfo()
@@ -327,10 +289,12 @@ if __name__ == '__main__':
     def line(t): return np.array([2*t, -t, 0*t+1.25])
     line_range = (-1, 1)
     # 2: U-Turn
-    n=6
-    a,b=1,4
-    uturn=lambda t: np.array([-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t),0*t+1.5])
-    uturn_range= (0,pi)
+    n = 6
+    a, b = 1, 4
+
+    def uturn(t): return np.array(
+        [-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)), -a*np.cos(t), 0*t+1.5])
+    uturn_range = (0, pi)
     # def uturn(t): return np.array(
     #     [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
 
@@ -366,7 +330,8 @@ if __name__ == '__main__':
         points.append(f(t))
     points = np.array(points).T
     print(points.shape)
-    p = Path_3D(points,headings=np.ones(len(points[0]))*5, speeds=np.ones(len(points[0]))*69, type='waypoints')
+    p = Path_3D(points, headings=np.ones(
+        len(points[0]))*5, speeds=np.ones(len(points[0]))*69, type='waypoints')
     # p=Path_3D(f,range=[0,2*pi],type='parametric')
     F = p.local_info(p.s)
 

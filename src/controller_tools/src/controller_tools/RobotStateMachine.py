@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 from time import sleep
 import rospy
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
@@ -63,19 +62,19 @@ class RobotModeState():
         self.mode = msg.mode
 
     def main(self):
-        f=15
+        f = 15
         rate = rospy.Rate(f)
-        i=0
+        i = 0
         while not rospy.is_shutdown():
             self.stateMachine()
-            if i%(2*f)==0:
+            if i % (2*f) == 0:
                 print(self)
-                i=0
-            i+=1
+                i = 0
+            i += 1
             rate.sleep()
 
     def stateMachine(self):
-        alt_error=0.1
+        alt_error = 0.1
         if self.altitude == -1:
             go_on = False
         else:
@@ -98,9 +97,10 @@ class RobotModeState():
                     self.set_mode_srv(0, GUIDED)
                     sleep(0.05)
                     while not self.armed:
-                        arm_successful=self.arming_srv(True)
+                        arm_successful = self.arming_srv(True)
                         if not arm_successful:
-                            print('[INFO] Not able to arm, check the system\'s state')
+                            print(
+                                '[INFO] Not able to arm, check the system\'s state')
                             break
                         else:
                             sleep(0.5)
@@ -109,8 +109,9 @@ class RobotModeState():
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:
                         self.state = TAKEOFF
                     else:
-                        print('Takeoff unsuccessful','Mode = GUIDED: ',self.mode == GUIDED,'Is armed: ',self.armed, self.takeoffAccepted)
-                elif self.userInput==LAND:
+                        print('Takeoff unsuccessful', 'Mode = GUIDED: ', self.mode ==
+                              GUIDED, 'Is armed: ', self.armed, self.takeoffAccepted)
+                elif self.userInput == LAND:
                     if self.mode != 'LAND':
                         self.land_srv()
                 elif self.mode not in [GUIDED, LAND]:
@@ -174,57 +175,5 @@ class RobotModeState():
         s = np.array(msg.data[3:5])
         self.speed = np.linalg.norm(s)
 
-    def __call__(self):
-        pass
-
     def __repr__(self) -> str:
         return 'Armed: '+str(self.armed)+'|Mode: '+str(self.mode) + '|State: ' + str(self.state)
-
-
-def main():
-    rospy.init_node('test', anonymous=True)
-    rate = rospy.Rate(3)
-    s = RobotModeState()
-    while not rospy.is_shutdown():
-        # s()
-        rate.sleep()
-
-
-if __name__ == "__main__":
-    main()
-
-
-# # Daniel
-# if mode==STABILIZE:
-#     if userInput==GUIDED:
-#         mode='GUIDED'
-#         set_mode_srv(0,mode)
-#         sleep(0.1)
-# elif mode==GUIDED:
-#     if userInput==ARM:
-#         arming_srv(True)
-#         sleep(0.1)
-# elif armed:
-#     if userInput==TAKEOFF:
-#         takeoff_srv(0,0,0,0,takeoff_alt)
-#         sleep(0.1)
-# elif state==TAKEOFF:
-#     verifyTakeoff(takeoff_srv.altitude)
-# elif state==HOVERING:
-#     if userInput==LANDING:
-#         land_srv(0,0,0,0,0)
-#         sleep(0.1)
-# elif state=='CONTROL':
-#     if userInput=='LAND':
-#         land_srv(0,0,0,0,0)
-#         sleep(0.1)
-#     else:
-#         # publish command
-#         pass
-# elif state=='END':
-#     if userInput=='RESTART':
-#         mode='STABILIZE'
-#         set_mode_srv(0,mode)
-#         sleep(0.1)
-# elif state=='PILOT':
-#     pass

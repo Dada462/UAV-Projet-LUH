@@ -17,7 +17,6 @@ from controller_tools.Map import Map
 from controller_tools.OA import OA,oa_alg
 from sensor_msgs.msg import Imu
 from time import time
-from scipy.signal import square as sq
 from sensor_msgs.msg import PointCloud2
 import ros_numpy as rn
 
@@ -26,7 +25,7 @@ class PID():
     def __init__(self):
         self.data=0
     
-    def __call__(self,data,bound):
+    def __call__(self,data,bound=np.inf):
         if bound<=0:
             raise ValueError('Bound must be positive')
         self.data=self.data+data
