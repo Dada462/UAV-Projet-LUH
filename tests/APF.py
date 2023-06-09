@@ -61,8 +61,33 @@ color_array = np.sqrt((u)**2 + (v)**2)
 
 # plt.streamplot(X, Y, u, v,color='cornflowerblue')
 # plt.quiver(X, Y, u, v,color_array)
-t=np.linspace(0,pi,200)
-plt.plot(1.5*np.cos(t)-3,1.5*np.sin(t))
+from controller_tools.tools import R
+closest_point=np.zeros(3)
+r1=np.array([1,0,0])
+th0=pi/4
+# waypoints=[list(closest_point+R(theta,'z')@r1) for theta in np.linspace(0,th0,40)]
+theta=np.linspace(0,th0,40)
+# theta=list(theta)
+from scipy.spatial.transform import Rotation
+r=Rotation.from_rotvec(np.array([np.zeros_like(theta),np.zeros_like(theta),theta]).T)
+r2=r.apply(r1)
+print(r2)
+# waypoints=np.array(waypoints).T
+waypoints=r2.T
+print(waypoints.shape)
+plt.plot(waypoints[0],waypoints[1])
+plt.plot([0,0],[0,-24])
+plt.xlim(-1,2)
+plt.ylim(-1,2)
+a=np.zeros((5,11,19))
+b=np.zeros((19,11))
+# print((a@b).shape)
+# plt.quiver(*(closest_point[:2]),*(r1[:2]),color='blue')
+# for r in r2:
+#     plt.quiver(*(closest_point[:2]),*(r[:2]),color='red')
+# plt.quiver(*(closest_point[:2]),*(r2[:2]),color='red')
+# t=np.linspace(0,pi,200)
+# plt.plot(1.5*np.cos(t)-3,1.5*np.sin(t))
 # plt.colorbar()
 # from controller_tools.tools import R,sawtooth
 # n=15

@@ -77,7 +77,8 @@ class GLViewWidget_Modified(gl.GLViewWidget):
         super().__init__(parent, devicePixelRatio, rotationMethod)
         # self.pressed_keys = set()
         # self.keyboard = [0, 0, 0, 0, 0, 0]
-        self.key_ids=[Qt.Key_Z,Qt.Key_S,Qt.Key_Q,Qt.Key_D,Qt.Key_A,Qt.Key_E,Qt.Key_F,Qt.Key_G]
+        self.key_ids = [Qt.Key_Z, Qt.Key_S, Qt.Key_Q,
+                        Qt.Key_D, Qt.Key_A, Qt.Key_E, Qt.Key_F, Qt.Key_G]
         self.keyboard = np.zeros(len(self.key_ids))
 
     def evalKeyState(self):
@@ -187,9 +188,6 @@ class plot2D(QtWidgets.QMainWindow):
         for id in self.data_plot:
             values = self.values[id][:self.cursors[id]]
             self.data_plot[id].setData(x=values[:, 0], y=values[:, 1])
-        # T=np.linspace(-10,10,4000)
-        # for id in self.data_plot:
-        # self.data_plot[id].setData(x=T,y=np.cos(T-self.i*0.075))
         self.i += 1
 
 
@@ -216,12 +214,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(gx)
         self.w.addItem(axis)
 
-        
-
         # r=Rotation.from_euler('ZYX',(45,0,0),degrees=True).as_matrix()
         # verts=(verts-vcenter)@r.T+vcenter
 
-        self.vehicle_mesh = RobotMesh(0.25*np.eye(3))
+        self.vehicle_mesh = RobotMesh(np.diag([0.6, 0.6, 0.35]))
         self.vehicle = gl.GLMeshItem(vertexes=self.vehicle_mesh.vertices,
                                      faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors, smooth=False)
         self.w.addItem(self.vehicle)
@@ -260,10 +256,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.robot_info_label_1.setFixedSize(100, 100)
         self.robot_info_label_1.move(10, 650)
 
-        self.parameters_box = QLineEdit(self)
-        self.parameters_box.move(600, 0)
-        self.parameters_box.resize(150, 25)
-        self.parameters_box.setText('0.4,1,2.5,1,1.5')
+        # self.parameters_box = QLineEdit(self)
+        # self.parameters_box.move(600, 0)
+        # self.parameters_box.resize(150, 25)
+        # self.parameters_box.setText('0.4,1,2.5,1,1.5')
 
         self.mission_state = {'start': False,
                               'go_home': True, 'keyboard': False}
@@ -274,6 +270,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pos_counter = 0
         self.state = None
         self.pfc = PF_controller
+        self.path_points=np.zeros((1,3))
         self.i = 0
 
         # Position trace
@@ -323,9 +320,8 @@ class MainWindow(QtWidgets.QMainWindow):
             width=3, color=(0, 0, 1, 1), glOptions='opaque')
         self.w.addItem(self.control_output)
         
-        # self.key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,
-        #            Qt.Key_Right, Qt.Key_G, Qt.Key_H]
-        self.key_ids=[Qt.Key_Z,Qt.Key_S,Qt.Key_Q,Qt.Key_D,Qt.Key_A,Qt.Key_E,56,53]
+        self.key_ids = [Qt.Key_Z, Qt.Key_S, Qt.Key_Q,
+                        Qt.Key_D, Qt.Key_A, Qt.Key_E, 56, 53]
         self.keyboard = np.zeros(len(self.key_ids))
         self.pressed_keys = set()
         self.timer = QtCore.QTimer()
@@ -395,20 +391,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def keyPressEvent(self, event):
         self.pressed_keys.add(event.key())
-        key_ids=self.key_ids
+        key_ids = self.key_ids
         keys = {key_ids[i]: i for i in range(len(key_ids))}
         for k in self.pressed_keys:
             # self.keyboard=[k==Qt.Key_Z,k==Qt.Key_S,k==Qt.Key_Q,k==Qt.Key_D,k==Qt.Key_E,k==Qt.Key_A]
             if k in keys:
                 self.keyboard[keys[k]] = 1
             if k == Qt.Key_Return or k == Qt.Key_Enter:
-                self.clickMethod()
                 self.update_values()
 
     def keyReleaseEvent(self, event):
         self.pressed_keys.discard(event.key())
         # key_ids = [Qt.Key_Up, Qt.Key_Down, Qt.Key_Left,Qt.Key_Right, Qt.Key_G, Qt.Key_H]
-        key_ids=self.key_ids
+        key_ids = self.key_ids
         keys = {key_ids[i]: i for i in range(len(key_ids))}
         if event.key() in keys:
             self.keyboard[keys[event.key()]] = 0
@@ -416,15 +411,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def keyboard_mode(self):
         self.mission_state['start'] = False
         self.mission_state['keyboard'] = True
-
-    def clickMethod(self):
-        vars = self.parameters_box.text().split(',')
-        try:
-            vars = [float(v) for v in vars]
-            self.pfc.vars = vars
-        except:
-            pass
-        # print('Parameters: ', vars)
 
     def update_values(self):
         for i in range(self.nb_of_params):
@@ -450,15 +436,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self.vehicle.setMeshData(vertexes=self.vehicle_mesh.vertices +
                                      self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter, :3])
-            self.point_to_follow.setData(pos=self.s_pos)
+            self.path.setData(pos=self.path_points)
             self.velodyne.setData(pos=self.vel)
             self.i += 1
             self.keyboard = self.w.keyboard
-            # t=self.i/20
-            # pos=np.array([0,0,5])
-            # dir=np.array([3*np.cos(t),3*np.sin(t),0])
-            # arrow=np.vstack((pos,pos+dir))
-            # self.control_output.setData(pos=arrow)
 
     def start_recording_mission(self):
         # Reinitialize the data
@@ -492,10 +473,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def land_pub(self):
         self.commands_sender.publish(String('LAND'))
-        self.commands_sender.publish(String('KEYBOARD'))
+        # self.commands_sender.publish(String('KEYBOARD'))
 
     def reset_mission_data(self):
-        self.pfc.s = 0
+        # self.pfc.s = 0
         self.positions = self.positions*0
         # self.pfc.PID.I=0
         self.data_to_plotx = []
@@ -503,10 +484,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.data_to_ploty2 = []
         self.data_to_ploty3 = []
 
-    def update_state(self, state, s_pos, error,vel):
+    def update_state(self, state, s_pos, error, vel):
         self.state = state
-        self.s_pos=s_pos
-        self.vel=vel
+        self.s_pos = s_pos
+        self.vel = vel
         self.positions[self.pos_counter] = state
         self.positions_times[self.pos_counter] = time.time()
         self.vehicle_mesh.position = state[:3]
@@ -515,7 +496,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.error = error
 
     def sawtooth(self, x):
-        return (x+pi) % (2*pi)-pi   # or equivalently   2*arctan(tan(x/2))
+        return (x+pi) % (2*pi)-pi   # or equivalently 2*arctan(tan(x/2))
 
     def mission_results(self):
         print('calculating results')
@@ -531,9 +512,5 @@ if __name__ == '__main__':
     T = np.linspace(0, 10, 500)
     for t in T:
         main.plot(t, np.sin(t), 2)
-
-    # main = MainWindow()
-    # main.state=np.zeros(12)
-    # main.update_plot_data()
     sys.exit(app.exec_())
     ################################## Pyqt ##################################

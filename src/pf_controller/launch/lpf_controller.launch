@@ -1,0 +1,4 @@
+<launch>
+  <node name="robot_state_pub" pkg="robot_state" type="state_pub.py" output="screen"/>
+  <node name="lpf" pkg="pf_controller_lpf" type="control.py" output="screen"/>
+</launch>

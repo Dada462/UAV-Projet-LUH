@@ -98,7 +98,7 @@ def main():
     p=Path()
     
     # Stuff for obs. avoidance
-    liney=lambda t : np.array([0*t,-t,0*t])+np.array([0,0,0.4])
+    liney=lambda t : np.array([0*t,t,0*t])+np.array([0,0,0.4])
     liney_range=(0,24)
 
     linex=lambda t : np.array([-t,0*t,0*t])+np.array([0,0,0.4])
@@ -169,7 +169,7 @@ def main():
     f=liney
     for t in np.linspace(*rng,6000):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,pi)))
+        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
     # p.poses=np.flip(p.poses)
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,-0],[-1,1,1,1.25,.75,0.5,-.75]

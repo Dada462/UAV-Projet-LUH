@@ -1,22 +1,15 @@
 #!/usr/bin/env python
-from typing import Any
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
-from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Vector3Stamped,Quaternion
-from mavros_msgs.msg import PositionTarget,AttitudeTarget
+from geometry_msgs.msg import TwistStamped,Vector3,PoseStamped,Point,Quaternion
+from mavros_msgs.msg import PositionTarget
 from numpy import cos, sin, tanh, pi
-from controller_tools.tools import Path_3D,R,sawtooth
-from controller_tools.MissionDisplayer import MainWindow, plot2D
-from pyqtgraph.Qt import QtWidgets
+from controller_tools.tools import Path_3D,sawtooth
 from scipy.spatial.transform import Rotation
-from scipy import signal
-from scipy.linalg import expm,logm
 from controller_tools.RobotStateMachine import RobotModeState
 from controller_tools.ActionServer import ActionServer
 from sensor_msgs.msg import Imu
-from time import time
-from scipy.signal import square as sq
 
 class PID():
     def __init__(self):
@@ -62,6 +55,7 @@ class PFController():
         speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
+        path_info = rospy.Publisher('/path_info', Quaternion, queue_size=10)
         f=30
         rate = rospy.Rate(f)
         i=0
@@ -69,7 +63,7 @@ class PFController():
         self.ds=0
         # self.displayer.clickMethod()
         s_pos=np.zeros(3)
-        self.error=0
+        self.error=0.
         last_heading=0
         while not rospy.is_shutdown():
             if self.pathIsComputed:
@@ -107,7 +101,7 @@ class PFController():
             elif self.sm.state=='HOVERING' or self.sm.state=='STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s=self.ds=0
-
+            path_info.publish(Quaternion(*s_pos,self.error))
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
             i+=1

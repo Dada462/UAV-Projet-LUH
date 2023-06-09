@@ -1,7 +1,7 @@
 import rospy
 import actionlib
 from uavr_nav_msgs.msg import FollowPathAction, FollowPathFeedback, FollowPathResult
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32MultiArray
 from numpy import array, inf
 
 class ActionServer():
@@ -14,6 +14,8 @@ class ActionServer():
             '/user_input', String, queue_size=10)
         self.user_input = rospy.Subscriber(
             '/user_input', String, self.userInputCallback)
+        self.path_pub=rospy.Publisher(
+            '/path', Float32MultiArray, queue_size=1)
         self.userInput = ''
         self.path = None
         self.distance_to_goal = inf
@@ -39,6 +41,9 @@ class ActionServer():
             speeds.append(speed)
             headings.append(heading)
         points = array(points).T
+        path_points=Float32MultiArray()
+        path_points.data=points.flatten()
+        self.path_pub.publish(path_points)
         while self.userInput != 'FOLLOWPATH' and not rospy.is_shutdown():
             self.user_input_pub.publish(String('FOLLOWPATH'))
             r.sleep()

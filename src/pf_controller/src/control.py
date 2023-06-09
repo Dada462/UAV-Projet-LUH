@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from typing import Any
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -12,8 +11,6 @@ from controller_tools.MissionDisplayer import MainWindow, plot2D
 from pyqtgraph.Qt import QtWidgets
 import sys
 from scipy.spatial.transform import Rotation
-from scipy import signal
-from scipy.linalg import expm,logm
 from controller_tools.RobotStateMachine import RobotModeState
 from controller_tools.ActionServer import ActionServer
 from controller_tools.Map import Map
@@ -23,8 +20,6 @@ from time import time
 from scipy.signal import square as sq
 from sensor_msgs.msg import PointCloud2
 import ros_numpy as rn
-
-
 
 
 class PID():
@@ -76,6 +71,7 @@ class PFController():
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
+        path_info = rospy.Publisher('/path_info', Quaternion, queue_size=10)
         f=30
         rate = rospy.Rate(f)
         i=0
@@ -84,7 +80,6 @@ class PFController():
         self.ds=0
         self.dsOA=0
         self.I=PID()
-        self.displayer.clickMethod()
         s_pos=vel=np.zeros(3)
         self.error=0
         self.last_dVr=np.zeros(3)
@@ -121,26 +116,27 @@ class PFController():
             # print(1/(time()-self.t0))
             # self.t0=time()
             if self.sm.userInput=='KEYBOARD':
-                u=self.displayer.keyboard
-                u=np.array([[1,-1,0,0,0,0,0,0],
-                            [0,0,1,-1,0,0,0,0],
-                            [0,0,0,0,0,0,1,-1],
-                            [0,0,0,0,1,-1,0,0]])@u
-                # msg=AttitudeTarget()
-                # msg.thrust=dz
-                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                # w=self.state[6:9]
-                # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-                # wd=0.15*D@(u[[0,1,3]])
-                # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
-                # attitude_pub.publish(msg)
+                pass
+                # u=self.displayer.keyboard
+                # u=np.array([[1,-1,0,0,0,0,0,0],
+                #             [0,0,1,-1,0,0,0,0],
+                #             [0,0,0,0,0,0,1,-1],
+                #             [0,0,0,0,1,-1,0,0]])@u
+                # # msg=AttitudeTarget()
+                # # msg.thrust=dz
+                # # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
+                # # w=self.state[6:9]
+                # # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
+                # # wd=0.15*D@(u[[0,1,3]])
+                # # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
+                # # attitude_pub.publish(msg)
 
-                msg=TwistStamped()
-                u[:3]=Rm.apply(u[:3])
-                dz=1.5*(0.5-self.state[2])-1*self.state[5]
-                msg.twist.linear=Vector3(*1*u[:2],dz)
-                msg.twist.angular=Vector3(0,0,3.5*u[3])
-                speed_pub.publish(msg)
+                # msg=TwistStamped()
+                # u[:3]=Rm.apply(u[:3])
+                # dz=1.5*(0.5-self.state[2])-1*self.state[5]
+                # msg.twist.linear=Vector3(*1*u[:2],dz)
+                # msg.twist.angular=Vector3(0,0,3.5*u[3])
+                # speed_pub.publish(msg)
             elif self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 OA=self.oa(self.state,self.sOA,self.vel,self.s)
                 if OA:
@@ -182,13 +178,13 @@ class PFController():
                 command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ +PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
                 command.type_mask = command.type_mask+PositionTarget.IGNORE_YAW
                 command.acceleration_or_force=Vector3(*u)
-                command.yaw_rate=command.yaw_rate=0.6*sawtooth(heading-self.state[8])
+                command.yaw_rate=command.yaw_rate=1*sawtooth(heading-self.state[8])
                 accel_command_pub.publish(command)
                 ############################## Acceleration Topic ##############################        
             elif self.sm.userInput=='HOME':
                 command=PoseStamped()
                 command.pose.position=Point(0,0,0.5)
-                q=Rotation.from_euler('XYZ',[0,0,180],degrees=True).as_quat()
+                q=Rotation.from_euler('XYZ',[0,0,0],degrees=True).as_quat()
                 command.pose.orientation=Quaternion(*q)
                 go_home_pub.publish(command)
                 self.s=self.ds=0
@@ -203,6 +199,7 @@ class PFController():
             elif self.sm.state=='HOVERING' or self.sm.state=='STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s=self.ds=0
+            path_info.publish(Quaternion(*s_pos,self.error))
             self.s=self.s+1/f*self.ds
             self.s=max(0,self.s)
             i+=1
@@ -492,9 +489,9 @@ class PFController():
         Rpath=F.R
         
         # pos=F.X
-        # s1=np.vstack((pos,pos+2*F.s1))
-        # y1=np.vstack((pos,pos+2*F.y1))
-        # w1=np.vstack((pos,pos+2*F.w1))
+        # s1=np.vstack((pos,pos+2*F.T))
+        # y1=np.vstack((pos,pos+2*F.N))
+        # w1=np.vstack((pos,pos+2*F.B))
         # self.displayer.s1_arrow.setData(pos=s1)
         # self.displayer.y1_arrow.setData(pos=y1)
         # self.displayer.w1_arrow.setData(pos=w1)
