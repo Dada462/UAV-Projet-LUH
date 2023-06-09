@@ -51,33 +51,32 @@ class pathInfo():
 
 class Path_3D():
     def __init__(self, *args, **kwargs):
-        if 'type' not in kwargs:
-            raise ValueError(
-                'You must specity a type, either type=\'parametric\' or \'waypoints\'')
-        if kwargs['type'] == 'parametric':
-            f = args[0]
-            if 'range' in kwargs:
-                values_range = kwargs['range']
+        if len(args)!=0:
+            if 'type' not in kwargs:
+                raise ValueError(
+                    'You must specity a type, either type=\'parametric\' or \'waypoints\'')
+            if kwargs['type'] == 'parametric':
+                f = args[0]
+                if 'range' in kwargs:
+                    values_range = kwargs['range']
+                else:
+                    values_range = [-10, 10]
+                t = np.linspace(*values_range, 6000)
+                points = f(t)
+                self.points = points.T
+            elif kwargs['type'] == 'waypoints':
+                points = args[0]
+                self.points = points.T
+            if 'speeds' not in kwargs:
+                self.speeds = np.ones(len(points[0]))*0.5
             else:
-                values_range = [-10, 10]
-            t = np.linspace(*values_range, 6000)
-            points = f(t)
-            self.points = points.T
-        elif kwargs['type'] == 'waypoints':
-            points = args[0]
-            self.points = points.T
-        if 'speeds' not in kwargs:
-            self.speeds = np.ones(len(points[0]))*0.5
-        else:
-            self.speeds = kwargs['speeds']
-        if 'headings' not in kwargs:
-            self.headings = np.zeros(len(points[0]))
-        else:
-            self.headings = kwargs['headings']
-        t0 = time()
-        # self.compute_path_properties()
-        self.compute_path_properties_PTF()
-        print(time()-t0)
+                self.speeds = kwargs['speeds']
+            if 'headings' not in kwargs:
+                self.headings = np.zeros(len(points[0]))
+            else:
+                self.headings = kwargs['headings']
+            # self.compute_path_properties()
+            self.compute_path_properties_PTF()
 
     def __call__(self, s):
         return self.local_info(s)
@@ -325,15 +324,15 @@ if __name__ == '__main__':
     # f=lambda t : np.array([3*(1.5+np.sin(6*t))*np.cos(t),3*(1.5+np.sin(6*t))*np.sin(t),0*t+1])
 
     # 1: Line
-    def line(t): return np.array([t, t, 0*t])+np.array([-1, 1, 1.5])
-    line_range = (-2, 4)
+    def line(t): return np.array([2*t, -t, 0*t+1.25])
+    line_range = (-1, 1)
     # 2: U-Turn
-    n = 6
-    r = 4
-
-    def uturn(t): return np.array(
-        [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
-    uturn_range = (0, pi)
+    n=6
+    a,b=1,4
+    uturn=lambda t: np.array([-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t),0*t+1.5])
+    uturn_range= (0,pi)
+    # def uturn(t): return np.array(
+    #     [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
 
     # 3: Obstacle avoidance 1
     def obs_av_1(t):

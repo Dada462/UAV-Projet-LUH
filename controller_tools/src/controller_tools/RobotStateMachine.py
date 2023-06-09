@@ -63,20 +63,27 @@ class RobotModeState():
         self.mode = msg.mode
 
     def main(self):
-        rate = rospy.Rate(15)
+        f=15
+        rate = rospy.Rate(f)
+        i=0
         while not rospy.is_shutdown():
-            # print(self)
             self.stateMachine()
+            if i%(2*f)==0:
+                print(self)
+                i=0
+            i+=1
             rate.sleep()
 
     def stateMachine(self):
+        alt_error=0.1
         if self.altitude == -1:
             go_on = False
         else:
             go_on = True
         if go_on:
+            # print(self.state)
             if self.state == INIT:
-                if abs(self.altitude) < 0.05:
+                if abs(self.altitude) < alt_error:
                     self.state = LANDED
                 else:
                     self.state = HOVERING
@@ -90,26 +97,31 @@ class RobotModeState():
                 if self.userInput == HOVER:
                     self.set_mode_srv(0, GUIDED)
                     sleep(0.05)
-                    if not self.armed:
-                        self.arming_srv(True)
-                        sleep(0.05)
+                    while not self.armed:
+                        arm_successful=self.arming_srv(True)
+                        if not arm_successful:
+                            print('[INFO] Not able to arm, check the system\'s state')
+                            break
+                        else:
+                            sleep(0.5)
                     resp = self.takeoff_srv(0, 0, 0, 0, self.takeoff_alt)
                     self.takeoffAccepted = resp.success
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:
                         self.state = TAKEOFF
                     else:
-                        print('Takeoff unsuccessful',self.takeoffAccepted)
+                        print('Takeoff unsuccessful','Mode = GUIDED: ',self.mode == GUIDED,'Is armed: ',self.armed, self.takeoffAccepted)
                 elif self.userInput==LAND:
-                    self.land_srv()
+                    if self.mode != 'LAND':
+                        self.land_srv()
                 elif self.mode not in [GUIDED, LAND]:
-                    if self.mode != STABILIZE or abs(self.altitude) >= 0.05:
+                    if self.mode != STABILIZE or abs(self.altitude) >= alt_error:
                         self.state = PILOT
             elif self.state == TAKEOFF:
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
                 else:
-                    if abs(self.altitude-self.takeoff_alt) < 0.05:
+                    if abs(self.altitude-self.takeoff_alt) < alt_error:
                         self.state = HOVERING
             elif self.state == HOVERING:
                 expectedMode = GUIDED
@@ -130,7 +142,7 @@ class RobotModeState():
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
                 else:
-                    if abs(self.altitude) < 0.05:
+                    if abs(self.altitude) < alt_error:
                         sleep(1)
                         self.state = LANDED
             elif self.state == CONTROL:
