@@ -59,7 +59,8 @@ class MD():
     
     def path_points_callback(self,msg):
         data=np.array(msg.data)
-        self.displayer.path_points=data.reshape((3,6000)).T
+        n=len(data)//3
+        self.displayer.path_points=data.reshape((3,n)).T
         
 
 if __name__=='__main__':
