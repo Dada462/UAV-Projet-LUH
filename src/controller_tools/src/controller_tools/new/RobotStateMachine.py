@@ -11,7 +11,7 @@ import threading
 
 
 class RobotModeState():
-    def __init__(self):
+    def __init__(self,pfc):
         global INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING
         global STABILIZE, GUIDED, LAND, LOITER
         global HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, NOT_GUIDED
@@ -35,7 +35,6 @@ class RobotModeState():
         self.userInput = None
         self.takeoffAccepted = False
         self.landAccepted = False
-        self.takeoff_successful = True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
         # rospy.Subscriber('user_input', String, self.userInputCallback)
@@ -50,6 +49,7 @@ class RobotModeState():
         self.getInfo_srv = rospy.ServiceProxy(
             '/mavros/vehicle_info_get', VehicleInfoGet)
 
+        self.AS=ActionServer(SM=self,pfc=pfc)
         self.r = rospy.Publisher(
             "/mavros/setpoint_position/local", PoseStamped, queue_size=10)
         ros_thread = threading.Thread(target=self.main, daemon=True)
@@ -68,14 +68,14 @@ class RobotModeState():
         rate = rospy.Rate(f)
         i = 0
         while not rospy.is_shutdown():
-            self.stateMachine()
+            self()
             if i % (2*f) == 0:
                 print(self)
                 i = 0
             i += 1
             rate.sleep()
 
-    def stateMachine(self):
+    def __call__(self):
         alt_error = 0.1
         if self.altitude == -1:
             go_on = False
@@ -83,17 +83,22 @@ class RobotModeState():
             go_on = True
         if go_on:
             if self.state == INIT:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',False)
                 if abs(self.altitude) < alt_error:
                     self.state = LANDED
                 else:
                     self.state = HOVERING
             elif self.state == PILOT:
+                self.AS.set_result('LANDING',False)
+                self.AS.set_result('TAKEOFF',False)
                 if self.mode == LAND:
                     self.state == LANDING
-                elif self.mode == GUIDED or (self.altitude < 0.1 and self.mode == STABILIZE):
+                elif self.mode == GUIDED:
                     self.state = INIT
                 self.userInput = ''
             elif self.state == LANDED:
+                self.AS.set_result('LANDING',False)
                 if self.userInput == HOVER:
                     self.set_mode_srv(0, GUIDED)
                     sleep(0.05)
@@ -109,27 +114,31 @@ class RobotModeState():
                     self.takeoffAccepted = resp.success
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:
                         self.state = TAKEOFF
-                        self.takeoff_successful = True
+                        self.AS.set_result('TAKEOFF',True)
                     else:
-                        print('Takeoff not successful', '|Mode = GUIDED?:', self.mode ==
-                              GUIDED, '|Is armed?:', self.armed, '|Takeoff Accepted?:', self.takeoffAccepted)
-                        self.takeoff_successful = False
+                        self.AS.set_result('TAKEOFF',False)
+                        print('Takeoff unsuccessful', 'Mode = GUIDED: ', self.mode ==
+                              GUIDED, 'Is armed: ', self.armed, self.takeoffAccepted)
                 elif self.userInput == LAND:
-                    if self.mode != 'LAND':
+                    self.AS.set_result('TAKEOFF',False)
+                    if self.mode != LAND:
                         self.land_srv()
                 elif self.mode not in [GUIDED, LAND]:
+                    self.AS.set_result('TAKEOFF',False)
                     if self.mode != STABILIZE or abs(self.altitude) >= alt_error:
                         self.state = PILOT
             elif self.state == TAKEOFF:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',True)
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
-                elif self.userInput == LAND:
-                    self.state = STOPPING
                 else:
                     if abs(self.altitude-self.takeoff_alt) < alt_error:
                         self.state = HOVERING
             elif self.state == HOVERING:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',True)
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
@@ -144,6 +153,8 @@ class RobotModeState():
                     elif self.userInput == FOLLOWPATH:
                         self.state = CONTROL
             elif self.state == LANDING:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',False)
                 expectedMode = LAND
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
@@ -152,6 +163,8 @@ class RobotModeState():
                         sleep(1)
                         self.state = LANDED
             elif self.state == CONTROL:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',True)
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
@@ -159,6 +172,8 @@ class RobotModeState():
                     if self.userInput == HOVER or self.userInput == LAND:
                         self.state = STOPPING
             elif self.state == STOPPING:
+                self.AS.set_result('TAKEOFF',False)
+                self.AS.set_result('LANDING',False)
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
@@ -181,8 +196,4 @@ class RobotModeState():
         self.speed = np.linalg.norm(s)
 
     def __repr__(self) -> str:
-        msg = 'Armed: '+str(self.armed)+'|Mode: ' + \
-            str(self.mode) + '|State: ' + str(self.state)
-        if self.userInput != None:
-            msg = msg+'|UI:' + self.userInput
-        return msg
+        return 'Armed: '+str(self.armed)+'|Mode: '+str(self.mode) + '|State: ' + str(self.state)

@@ -111,10 +111,10 @@ def main():
     
 
     # 1: Line
-    def line(t): return np.array([2*t, -t, 0*t+0.5])
+    line = lambda t: np.array([2*t, -t, 0*t+0.5])
     line_range = (-1,1)
     # 2: U-Turn
-    n=4
+    n=6
     a,b=1,4
     uturn=lambda t: np.array([-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t),0*t+0.5])
     uturn_range= (-pi,0)
@@ -179,7 +179,7 @@ def main():
     for i,t in enumerate(np.linspace(*rng,nb_points)):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
         plot_points[i]=f(t)
-        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+        p.velocities.append(Twist(Vector3(2,0,0),Vector3(0,0,0)))
     
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]
@@ -188,10 +188,10 @@ def main():
     # xpoints,ypoints=a
     # print(np.round(a,2))
     # data = get_bezier_parameters(xpoints, ypoints, degree=3)
-    # xvals, yvals = bezier_curve(data, nTimes=6000)
+    # xvals, yvals = bezier_curve(data, nTimes=350)
     # xvals, yvals = np.flip(xvals),np.flip(yvals)
-    # plot_points=np.zeros((6000,3))
-    # for i in range(6000):
+    # plot_points=np.zeros((350,3))
+    # for i in range(350):
     #     plot_points[i]=xvals[i],yvals[i],1.25
     #     p.poses.append(Pose(Point(xvals[i],yvals[i],0.5),Quaternion()))
     #     p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))

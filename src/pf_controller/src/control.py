@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -14,7 +14,7 @@ from scipy.spatial.transform import Rotation
 from controller_tools.RobotStateMachine import RobotModeState
 from controller_tools.ActionServer import ActionServer
 from controller_tools.Map import Map
-from controller_tools.OA import OA,oa_alg
+from controller_tools.OA import oa_alg
 from sensor_msgs.msg import Imu
 from time import time
 from sensor_msgs.msg import PointCloud2
@@ -91,6 +91,7 @@ class PFController():
             Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False)
             if self.pathIsComputed:
                 s_pos=self.path_to_follow.local_info(self.s).X
+                # self.sm.AS.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
                 self.pathAction.distance_to_goal=np.linalg.norm(s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             # t=(distances>0.4)*(distances<3)*(vel[:,2]>-0.4)
             # vel=vel[t]
@@ -158,18 +159,6 @@ class PFController():
                     self.ds=ds
                     self.sOA=0
                     self.dsOA=0
-                # u1,heading=self.control_pid(kpath)
-                # # r=Rotation.from_euler('XYZ',[0,0,25],degrees=True)
-                # # rep=r.apply(rep)
-                # u,_,_=OA(self.state,self.vel,u1)
-                # col=np.dot(u1,rep)/(np.linalg.norm(u1)*np.linalg.norm(rep))
-                # col=np.abs(np.dot(u1,rep))
-                # if col>0.9:
-                #     kpath=kpath*1.02
-                # else:
-                #     kpath=kpath/1.02
-                # kpath=np.clip(kpath,0.55,20)
-                # print("***",kpath)
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp=rospy.Time().now()
@@ -540,8 +529,8 @@ class PFController():
         d_path=np.linalg.norm(e1/kpath)
         ve=vc*(1-np.tanh(d_path))
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
-        # if ((ptf.s_max-self.s)<1):
-        #     ve=(ptf.s_max-self.s)-0.5*Vp[0]
+        if ((ptf.s_max-self.s)<vc*2):
+            ve=(ptf.s_max-self.s)-0.75*Vp[0]
         d_path1=np.linalg.norm(e/kpath)
         t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -178,7 +178,7 @@ class PFController():
         d_path = np.linalg.norm(e1/kpath)
         ve = nu_d*(1-np.tanh(d_path))
         dve = -nu_d/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
-        if ((self.path_to_follow.s_max-self.s) < 1):
+        if ((self.path_to_follow.s_max-self.s) < nu_d*2):
             ve = np.clip(self.path_to_follow.s_max-self.s, -0.5, 0.5)
             dve = -np.clip(ds, -0.5, 0.5)*(np.abs(ds) <= 0.5)
         Vp = -Vpath*np.tanh(e1/kpath)+np.array([ve, 0, 0])
