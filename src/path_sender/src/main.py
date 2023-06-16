@@ -92,8 +92,6 @@ def bezier_curve(points, nTimes=50):
 
 
 def main():
-    
-    
     client = actionlib.SimpleActionClient('followPath', FollowPathAction)
     client.wait_for_server()
     print('Sending path')
