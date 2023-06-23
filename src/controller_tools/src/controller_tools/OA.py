@@ -1,10 +1,12 @@
 import numpy as np
 from scipy.spatial.transform import Rotation
 from controller_tools.tools import Path_3D, R
-from scipy.optimize import newton
+from scipy.optimize import newton,fsolve
 from numpy.linalg import norm
-
-
+from numpy import pi
+import rospy
+from std_msgs.msg import Float32MultiArray
+from sklearn.cluster import KMeans
 def OA(state, vel):
     Rm = Rotation.from_euler('XYZ', angles=state[6:9], degrees=False)
     distances = np.linalg.norm(vel, axis=1)
@@ -55,18 +57,23 @@ def OA(state, vel):
 
 
 class oa_alg:
-    def __init__(self, ptf=None, dt=1/30, r0=1, displayer=None):
+    def __init__(self, ptf=None, dt=1/30, r0=1.5, pfc=None):
         self.oa = False
         self.first_time = True
         self.ptf = ptf
+        self.pfc=pfc
         self.r0 = r0
         self.dt = dt
         self.sOA = 0
-        self.displayer = displayer
+        # self.displayer = displayer
         self.i = 0
         self.current_obstacle = np.zeros(3)+np.inf
+        self.path_pub = rospy.Publisher('/path/points/oa', Float32MultiArray, queue_size=1)
+        self.kmeans = KMeans(n_clusters=2)
+        
 
     def pfc_eq(self, s):
+        # s=np.clip(s,0,self.ptf.s_max)
         F = self.ptf.local_info(s)
         return norm(F.X-self.obstacle)-self.r0
 
@@ -86,37 +93,128 @@ class oa_alg:
         closest_point = Rm.apply(vel[p])+X
         d = distances[p]
         self.obstacle = closest_point
-        r0 = 1.5
+        self.pfc.closest_obstacle_distance=d
+        r0 = self.r0
         eps0 = 0.2
         F1 = self.ptf.local_info(sptf)
-        if d < r0+0.35 and F1.R[:, 0]@(closest_point-X) > 0:
-            if self.first_time or norm(self.current_obstacle-closest_point) > 0.3:
-                self.compute_path([X, closest_point, F1, sptf, r0])
+        dt=1/30
+        preventive_distance=np.min(norm(vel+Vr*dt,axis=1))
+        if d < r0+0.35 and (F1.R[:, 0]@(closest_point-X) > 0) or preventive_distance<r0:
+        # if d < r0+0.35 and (F1.R[:, 0]@(closest_point-X) > 0):
+            if self.first_time:
+                self.compute_path([X, closest_point, F1, sptf, r0],first_time=True)
+            elif norm(self.current_obstacle-closest_point) > 0.2:
+                self.compute_path([X, closest_point, F1, sptf, r0],first_time=False)
+            points=self.oa_ptf.points.T
+            path_points = Float32MultiArray()
+            path_points.data = points.flatten()
+            self.path_pub.publish(path_points)
         if self.oa:
             if self.oa_ptf.s_max-self.sOA < eps0:
+            # print('ptf points',self.oa_ptf.points.shape)
+            # distances_to_path=norm(X-self.ptf.points,axis=1)
+            # print(distances_to_path.shape)
+            # dist_to_path=np.min(distances_to_path)
+            # if dist_to_path < 0.05:
                 self.oa = False
                 self.first_time = True
                 self.i += 1
                 self.sOA = 0
         return self.oa
 
-    def compute_path(self, vars):
+    def compute_path(self, vars, first_time):
         X, closest_point, F1, sptf, r0 = vars
         # S1=X+F1.R[:,0]*0.35
         # S1=self.ptf.local_info(sptf+0.35).X
-        s_S1 = newton(self.pfc_eq, sptf-0.5*r0, tol=1e-3)
-        F = self.ptf.local_info(s_S1)
-        S1 = F.X
-        s_S2 = newton(self.pfc_eq, sptf+2.5*r0, tol=1e-3)
-        F = self.ptf.local_info(s_S2)
-        S2 = F.X
+        # if self.first_time and norm(self.ptf.local_info(sptf).X-X)>2:
+        #     S1=F.X
+
+        # theta = np.zeros((40, 3))
+        # theta[:, -1] = np.linspace(0, 2*pi, 40)
+        # rot_obstacle = Rotation.from_rotvec(theta)
+        # r1=np.array([r0,0,0])
+        # waypoints = closest_point+rot_obstacle.apply(r1)
+        # points = waypoints.T
+        # path_points = Float32MultiArray()
+        # path_points.data = points.flatten()
+        # self.path_pub.publish(path_points)
+
+        # f1=self.ptf.s_to_df
+        # f=lambda s: 2*(self.ptf.s_to_XYZ(s)-self.obstacle)@f1(s)
+        F=self.ptf.local_info(np.linspace(0,self.ptf.s_max,500))
+        y=np.abs(norm(F.X.T-self.obstacle,axis=1)-r0)
+        # z=F.X.T[y<0.1]
+        z=F.s[y<0.15].reshape((-1,1))
+        self.kmeans.fit(z)
+        # Get the cluster labels for each point
+        labels = self.kmeans.labels_
+        # Separate points into two sets based on the cluster labels
+        points_set1 = z[labels == 0].flatten()
+        points_set2 = z[labels == 1].flatten()
+        s_S1=points_set1[0]
+        s_S2=points_set2[0]
+        if s_S1>s_S2:
+            s_S1p=s_S2
+            s_S2=s_S1
+            s_S1=s_S1p
+        
+        S1 = self.ptf.local_info(s_S1).X
+        S2 = self.ptf.local_info(s_S2).X
+        # if norm(S1-X)>norm(S2-X):
+        #     S1p=S2.copy()
+        #     S2=S1.copy()
+        #     S1=S1p
+
+        # s_S1 = newton(self.pfc_eq, max(0.1,sptf-0.5*r0),tol=1e-2,maxiter=10)
+        # # s_S1 = fsolve(self.pfc_eq, max(0,sptf-0.5*r0))
+        # s_S1=s_S1
+        # F = self.ptf.local_info(s_S1)
+        # S1 = F.X
+        # s_S2 = newton(self.pfc_eq, min(sptf+2.5*r0,self.ptf.s_max-0.1),tol=1e-2,maxiter=10)
+        # # s_S2 = fsolve(self.pfc_eq, min(sptf+2.5*r0,self.ptf.s_max))
+        # s_S2=s_S2
+        # F = self.ptf.local_info(s_S2)
+        # S2 = F.X
+        print(s_S1,s_S2)
+
+
         r1 = S1-closest_point
         r2 = S2-closest_point
+        self.pfc.s=s_S2
         dot_prod = np.dot(r1, r2)/(norm(r1)*norm(r2))
-        cross_prod = np.sign(np.cross(r1, r2)[-1])
-        th0 = np.arccos(dot_prod)*cross_prod
-        # waypoints=[list(closest_point+R(theta,'z')@r1) for theta in np.linspace(0,th0,200)]
-        # waypoints=np.array(waypoints).T
+        dot_prod=np.clip(dot_prod,-1,1)
+        angle_sign = np.sign(np.cross(r1, r2)[-1])
+        th0 = np.arccos(dot_prod)*angle_sign
+        if first_time:
+            # print('got the first time: ',angle_sign)
+            self.rot_dir=angle_sign
+        else:
+            # print('this is the angle before',180*th0/pi,S1,S2,angle_sign)
+            if self.rot_dir*angle_sign<0:
+                # print('here')
+                th0=th0*self.rot_dir
+                th0=th0%(2*pi)
+                th0=th0*self.rot_dir
+            # print('this is the angle before',180*th0/pi,S1,S2,angle_sign)
+
+
+            # print('before',180*th0/pi,self.rot_dir,cross_prod,'CP',closest_point,'X',X)
+            # if self.rot_dir>0 and cross_prod<0:
+            #     th0=-th0+2*pi
+            # elif self.rot_dir<0 and cross_prod>0:
+            #     th0=th0-2*pi
+            # print('after',180*th0/pi,self.rot_dir)
+        # dist_to_path=norm(self.ptf.local_info(sptf).X-X)
+        # max_distance_to_path=0.15
+        # print(dist_to_path)
+        # if dist_to_path>max_distance_to_path:
+        #     if not first_time:
+        #         if cross_prod*self.rot_dir<0:
+        #             th0=th0-2*pi
+        #             cross_prod=self.rot_dir
+        # th0 = th0*cross_prod
+        
+        # th0=2*pi*np.sign(th0)
         theta = np.zeros((40, 3))
         theta[:, -1] = np.linspace(0, th0, 40)
         rot_obstacle = Rotation.from_rotvec(theta)
@@ -124,78 +222,9 @@ class oa_alg:
         waypoints = waypoints.T
         self.oa_ptf = Path_3D(waypoints, headings=np.zeros(
             len(waypoints[0])), speeds=np.ones(len(waypoints[0]))*0.5, type='waypoints')
-        self.displayer.oa_path.setData(pos=self.oa_ptf.points[:, :3])
+        # self.displayer.oa_path.setData(pos=self.oa_ptf.points[:, :3])
         self.oa = True
         self.first_time = False
         self.current_obstacle = closest_point
 
-    def __call__old(self, state, s, vel, sptf):
-        # Rm=Rotation.from_euler('XYZ',angles=state[6:9],degrees=False)
-        distances = np.linalg.norm(vel, axis=1)
-        t = (distances > 0.4)*(vel[:, 2] > -0.35)
-        vel = vel[t]
-        distances = distances[t]
-        if len(distances) == 0:
-            return False
-        X = state[:3]
-        # Vr=state[3:6]
-
-        p = np.argmin(distances)
-        closest_point = vel[p]
-        d = distances[p]
-        # obstacles=np.array([[0.1,-2,0.4],[-0.1,-4.1,0.4]])
-        # i=np.argmin(norm(obstacles-X,axis=1))
-        # closest_point=obstacles[i]
-        self.obstacle = closest_point
-        d = norm(X-closest_point)
-        # print(closest_point)
-        r0 = 1
-        eps0 = 0.2
-        F1 = self.ptf.local_info(sptf)
-        if d < r0+0.35 and F1.R[:, 0]@(closest_point-X) > 0:
-            if self.first_time:
-                # print('HEREEE',self.i,s)
-                # S1=X+Rm.apply(Vr)/norm(Vr)*0.35*0
-                S1 = X+F1.R[:, 0]*0.35
-                s_S2 = newton(self.pfc_eq, sptf+2.5*r0)
-                F = self.ptf.local_info(s_S2)
-                S2 = F.X
-                r1 = S1-closest_point
-                r2 = S2-closest_point
-                dot_prod = np.dot(r1, r2)/(norm(r1)*norm(r2))
-                cross_prod = np.sign(np.cross(r1, r2)[-1])
-                # print(np.cross(r1,r2))
-                th0 = np.arccos(dot_prod)*cross_prod
-                # print(np.linspace(0,th0,200))
-                # waypoints=[list(closest_point+R(theta,'z')@r1) for theta in np.linspace(0,th0,40)]
-                # waypoints=np.array(waypoints).T
-                theta_linspace = np.linspace(0, th0, 40)
-                theta = np.zeros((40, 3))
-                theta[:, -1] = theta_linspace
-                rot_obstacle = Rotation.from_rotvec(theta)
-                r2 = rot_obstacle.apply(r1)
-                waypoints = r2.T
-                # import matplotlib.pyplot as plt
-                # plt.plot(waypoints[0],waypoints[1])
-                # plt.plot([0,0],[0,-24])
-                # plt.xlim(-2,2)
-                # plt.ylim(-,0)
-                # plt.quiver(*(closest_point[:2]),*(r1[:2]),color='blue')
-                # plt.quiver(*(closest_point[:2]),*(r2[:2]),color='red')
-                # plt.savefig('test1.png')
-                self.oa_ptf = Path_3D(waypoints, headings=np.zeros(
-                    len(waypoints[0])), speeds=np.ones(len(waypoints[0]))*1, type='waypoints')
-                self.displayer.oa_path.setData(pos=self.oa_ptf.points[:, :3])
-                self.oa = True
-                self.first_time = False
-        # print(self.sOA)
-        if self.oa:
-            if self.oa_ptf.s_max-self.sOA < eps0:
-                # print('OAAAA',self.oa_ptf.s_max,self.sOA)
-                self.oa = False
-                self.first_time = True
-                self.i += 1
-                self.sOA = 0
-                # self.i=np.clip(self.i,0,1,dtype=int)
-        return self.oa
 

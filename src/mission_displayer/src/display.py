@@ -18,8 +18,9 @@ class MD():
         self.vel=np.zeros(3)
         rospy.init_node('mission_displayer', anonymous=True)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.update_state_1)
-        rospy.Subscriber('/path_info', Quaternion, self.path_info_callback)
-        rospy.Subscriber('/path', Float32MultiArray, self.path_points_callback)
+        rospy.Subscriber('/path/info', Quaternion, self.path_info_callback)
+        rospy.Subscriber('/path/points/ptf', Float32MultiArray, self.path_points_callback)
+        rospy.Subscriber('/path/points/oa', Float32MultiArray, self.oa_path_points_callback)
         # rospy.Subscriber('/velodyne', PointCloud2, self.velodyneCallback)
         
         
@@ -61,6 +62,11 @@ class MD():
         data=np.array(msg.data)
         n=len(data)//3
         self.displayer.path_points=data.reshape((3,n)).T
+
+    def oa_path_points_callback(self,msg):
+        data=np.array(msg.data)
+        n=len(data)//3
+        self.displayer.oa_path_points=data.reshape((3,n)).T
         
 
 if __name__=='__main__':

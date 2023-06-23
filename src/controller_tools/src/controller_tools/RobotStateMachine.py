@@ -6,6 +6,7 @@ from mavros_msgs.msg import State
 from std_msgs.msg import String, Float32MultiArray
 from geometry_msgs.msg import PoseStamped
 from controller_tools.ActionServer import ActionServer
+from std_msgs.msg import String
 import numpy as np
 import threading
 
@@ -38,7 +39,7 @@ class RobotModeState():
         self.takeoff_successful = True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
-        # rospy.Subscriber('user_input', String, self.userInputCallback)
+        rospy.Subscriber('user_input', String, self.userInputCallback)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
@@ -50,8 +51,7 @@ class RobotModeState():
         self.getInfo_srv = rospy.ServiceProxy(
             '/mavros/vehicle_info_get', VehicleInfoGet)
 
-        self.r = rospy.Publisher(
-            "/mavros/setpoint_position/local", PoseStamped, queue_size=10)
+        self.r = rospy.Publisher("/mavros/setpoint_position/local", PoseStamped, queue_size=10)
         ros_thread = threading.Thread(target=self.main, daemon=True)
         ros_thread.start()
 
@@ -174,6 +174,8 @@ class RobotModeState():
                         sleep(.05)
                         if self.landAccepted and self.mode == LAND:
                             self.state = LANDING
+                    elif self.speed < 0.1:
+                        self.state = HOVERING
 
     def stateCallback(self, msg):
         self.altitude = msg.data[2]

@@ -98,8 +98,8 @@ def main():
     p=Path()
     
     # Stuff for obs. avoidance
-    liney=lambda t : np.array([0*t,-t,0*t])+np.array([0,0,0.4])
-    liney_range=(0,24)
+    liney=lambda t : np.array([0*t,t,0*t])+np.array([0,0,0.4])
+    liney_range=(0,21.5)
 
     linex=lambda t : np.array([-t,0*t,0*t])+np.array([0,0,0.4])
     linex_range=(0,15)
@@ -114,7 +114,7 @@ def main():
     # 2: U-Turn
     n=6
     a,b=1,4
-    uturn=lambda t: np.array([-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n)),-a*np.cos(t),0*t+0.5])
+    uturn=lambda t: np.array([-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n))+1,-a*np.cos(t),0*t+0.5])
     uturn_range= (-pi,0)
     
     # uturn=lambda t: np.array([-a*np.cos(t),+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)),0*t+0.5])
@@ -169,15 +169,15 @@ def main():
    
     
 
-    rng=uturn_range
-    f=uturn
+    rng=liney_range
+    f=liney
 
     nb_points=250
     plot_points=np.zeros((nb_points,3))
     for i,t in enumerate(np.linspace(*rng,nb_points)):
         p.poses.append(Pose(Point(*f(t)),Quaternion()))
         plot_points[i]=f(t)
-        p.velocities.append(Twist(Vector3(2,0,0),Vector3(0,0,0)))
+        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
     
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]

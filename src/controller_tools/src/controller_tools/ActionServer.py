@@ -40,7 +40,7 @@ class ActionServer():
         self.battery_voltage = -inf
         rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
         self.path_pub = rospy.Publisher(
-            '/path', Float32MultiArray, queue_size=1)
+            '/path/points/ptf', Float32MultiArray, queue_size=1)
 
         self.userInput = ''
         self.path = None
@@ -98,6 +98,7 @@ class ActionServer():
                 pathInterrupted = True
                 break
             followPathFeedback.distance_to_goal = self.distance_to_goal
+            followPathFeedback.closest_obstacle = self.pfc.closest_obstacle_distance
             self.followPathServer.publish_feedback(followPathFeedback)
             r.sleep()
 
@@ -113,14 +114,15 @@ class ActionServer():
             else:
                 result.result = result.UNKNOWN_ERROR
             self.followPathServer.set_aborted(result)
+            self.SM.userInput = 'HOVER'
 
         elif not pathInterrupted and not rospy.is_shutdown():
             print('[SUCCES] The path was successfully followed')
             result.result = result.SUCCESS
             self.followPathServer.set_succeeded(result)
+            self.SM.userInput = 'WAIT'
         self.pfc.ds = 0
         self.pfc.s = 0
-        self.SM.userInput = 'WAIT'
 
     def LandExecute_cb(self, goal):
         self.landing_successful = None

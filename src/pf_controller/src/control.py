@@ -39,18 +39,19 @@ class PFController():
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
         rospy.Subscriber('/velodyne', PointCloud2, self.velodyneCallback)
         
-        app = QtWidgets.QApplication(sys.argv)
-        self.displayer=MainWindow(self)
+        # app = QtWidgets.QApplication(sys.argv)
+        # self.displayer=MainWindow(self)
         self.sm=RobotModeState()
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
         # self.p=plot2D()
         
-        ros_thread = threading.Thread(target=self.main,daemon=True)
-        ros_thread.start()
+        self.main()
+        # ros_thread = threading.Thread(target=self.main,daemon=True)
+        # ros_thread.start()
 
-        sys.exit(app.exec_())
+        # sys.exit(app.exec_())
 
     def velodyneCallback(self,msg):
         self.vel=rn.point_cloud2.pointcloud2_to_xyz_array(msg)
@@ -70,7 +71,7 @@ class PFController():
         accel_command_pub = rospy.Publisher('/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         # attitude_pub = rospy.Publisher('/mavros/setpoint_raw/attitude', AttitudeTarget, queue_size=10)
         go_home_pub = rospy.Publisher('/mavros/setpoint_position/local', PoseStamped, queue_size=10)
-        path_info = rospy.Publisher('/path_info', Quaternion, queue_size=10)
+        path_info = rospy.Publisher('/path/info', Quaternion, queue_size=10)
         f=30
         rate = rospy.Rate(f)
         i=0
@@ -79,14 +80,13 @@ class PFController():
         self.ds=0
         self.dsOA=0
         self.I=PID()
-        s_pos=vel=np.zeros(3)
+        s_pos=np.zeros(3)
         self.error=0
         self.last_dVr=np.zeros(3)
         self.t0=time()
         self.m=Map(50,500)
-        kpath=0.55
-        # rep=np.zeros(3)
-        # vel1=np.zeros(3)
+        self.state=np.zeros(12)
+        self.closest_obstacle_distance=np.inf
         while not rospy.is_shutdown():
             Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False)
             if self.pathIsComputed:
@@ -102,8 +102,9 @@ class PFController():
             # rep=vel.T/distances*1/(1+0.01*distances**10)
             # rep=-kvel*np.sum(rep.T,axis=0)
             # rep,vel,Rm=OA(self.state,self.vel)
-            vel1=Rm.apply(self.vel)
-            vel1=vel1+self.state[:3]
+            # vel1=Rm.apply(self.vel)
+            # vel1=vel1+self.state[:3]
+            vel1=np.zeros(3)
 
             # dir=Rm.apply(u)
             # arrow=np.vstack((self.state[:3],self.state[:3]+dir))
@@ -112,35 +113,15 @@ class PFController():
             # if i%90==0:
             #     vel2=self.m.array_to_points()
             # map3D=np.where((self.m.data==1))
-            self.displayer.update_state(self.state,s_pos,self.error,vel1)
+            # self.displayer.update_state(self.state,s_pos,self.error,vel1)
             # print(1/(time()-self.t0))
             # self.t0=time()
             if self.sm.userInput=='KEYBOARD':
-                # pass
-                u=self.displayer.keyboard
-                u=np.array([[1,-1,0,0,0,0,0,0],
-                            [0,0,1,-1,0,0,0,0],
-                            [0,0,0,0,0,0,1,-1],
-                            [0,0,0,0,1,-1,0,0]])@u
-                # msg=AttitudeTarget()
-                # msg.thrust=dz
-                # msg.type_mask=AttitudeTarget.IGNORE_ATTITUDE
-                # w=self.state[6:9]
-                # D=np.array([[0,-1,0],[1,0,0],[0,0,0]])
-                # wd=0.15*D@(u[[0,1,3]])
-                # msg.body_rate=Vector3(*2*(wd-w)[:2],u[3])
-                # attitude_pub.publish(msg)
-
-                msg=TwistStamped()
-                u[:3]=Rm.apply(u[:3])
-                dz=1.5*(1.5-self.state[2])-1*self.state[5]
-                msg.twist.linear=Vector3(*1*u[:2],dz)
-                msg.twist.angular=Vector3(0,0,3.5*u[3])
-                speed_pub.publish(msg)
+                pass
             elif self.sm.state=='CONTROL' and self.sm.userInput!='HOME' and self.sm.userInput!='WAIT' and self.pathIsComputed:
                 OA=self.oa(self.state,self.sOA,self.vel,self.s)
                 if OA:
-                    u,heading,ds=self.control_pid_1(self.sOA,self.oa.oa_ptf)
+                    u,heading,ds=self.control_pid_1(self.sOA,self.oa.oa_ptf,OA=True)
                     Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False).as_matrix()
                     F=self.path_to_follow.local_info(self.s)
                     Rpath=F.R
@@ -200,8 +181,9 @@ class PFController():
         if len(points)!=0:
             # try:
             self.path_to_follow=Path_3D(points,speeds=speeds,headings=headings,type='waypoints')
-            self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
-            self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,displayer=self.displayer)
+            # self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
+            # self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,displayer=self.displayer)
+            self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,pfc=self)
             self.pathIsComputed=True
             # except:
             # print('[ERROR] Path properties were not possible to compute [ERROR]')
@@ -352,7 +334,7 @@ class PFController():
         pos=X
         dir=dVr
         arrow=np.vstack((pos,pos+3*dir))
-        self.displayer.control_output.setData(pos=arrow)
+        # self.displayer.control_output.setData(pos=arrow)
         return dVr,heading
 
     def control_pid(self,kpath=0.55):
@@ -455,7 +437,7 @@ class PFController():
 
         return dVr,heading
 
-    def control_pid_1(self,s,ptf):
+    def control_pid_1(self,s,ptf,OA=False):
         # Ke,k0,k1,Ks,Kth,nu_d,_,vc=self.displayer.values
         
         # Robot state
@@ -529,12 +511,12 @@ class PFController():
         d_path=np.linalg.norm(e1/kpath)
         ve=vc*(1-np.tanh(d_path))
         dve=-vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
-        if ((ptf.s_max-self.s)<vc*2):
+        if ((ptf.s_max-self.s)<vc*2) and not OA:
             ve=(ptf.s_max-self.s)-0.75*Vp[0]
         d_path1=np.linalg.norm(e/kpath)
         t=-Ke*np.clip(Vp[0]**2,-2,2)*np.array([1,0,0])*np.tanh(F.C/5)*6/(1+d_path1)
 
-        dVp=np.array([dve+2*(ve-Vp[0]),0,0])-k1*np.clip(de1,-2,2)-k0*np.clip(e1,-1.5,1.5)+t
+        dVp=np.array([dve+2*(ve-Vp[0]),0,0])-k1*np.clip(de1,-2,2)-k0*np.clip(e1,-0.5,0.5)+t
         
         # Acceleration commands
         dVr=Rtheta.T@(dVp-dRtheta@Vr)

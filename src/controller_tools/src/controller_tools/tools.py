@@ -163,6 +163,9 @@ class Path_3D():
         # Interpolation of the speeds and headings
         self.s_to_speeds = interpolate.interp1d(s, self.speeds)
         self.s_to_headings = interpolate.interp1d(s, self.headings)
+        
+        self.s_to_df = interpolate.interp1d(s, T)
+        # print(np.min(np.abs(ds)))
 
     def compute_path_properties(self):
         points = self.points.T
@@ -278,6 +281,8 @@ if __name__ == '__main__':
     plot = pg.plot(pen={'color': '#0e70ec', 'width': 2}, background='w')
     plot.resize(1200, 850)
     plot.move(300, 115)
+    scatter=pg.ScatterPlotItem(pen={'color': '#0e70ec', 'width': 2})
+    plot.addItem(scatter)
 
     # f=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(4*t))*np.cos(t),1*(1+0.25*np.sin(4*t))*np.sin(t),0*t+0.5])
     # p=Path_3D(lambda t : np.array([t**2,-10+t,10+0*t]),[-20,20],type='parametric')
@@ -292,9 +297,10 @@ if __name__ == '__main__':
     n = 6
     a, b = 1, 4
 
-    def uturn(t): return np.array(
-        [-2+b*np.sign(np.sin(t))*((1-np.cos(t)**n)**(1/n)), -a*np.cos(t), 0*t+1.5])
-    uturn_range = (0, pi)
+    n=6
+    a,b=1,4
+    uturn=lambda t: np.array([-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n))+1,-a*np.cos(t),0*t+0.5])
+    uturn_range= (-pi,0)
     # def uturn(t): return np.array(
     #     [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
 
@@ -326,33 +332,60 @@ if __name__ == '__main__':
     rng = uturn_range
     f = uturn
     points = []
-    for t in np.linspace(*rng, 6000):
+    for t in np.linspace(*rng, 350):
         points.append(f(t))
     points = np.array(points).T
-    print(points.shape)
+    # print(points.shape)
     p = Path_3D(points, headings=np.ones(
         len(points[0]))*5, speeds=np.ones(len(points[0]))*69, type='waypoints')
     # p=Path_3D(f,range=[0,2*pi],type='parametric')
     F = p.local_info(p.s)
-
+    # obstacle=np.array([-0.467792,-2.359100,0.4])
+    obstacle=np.array([[2.359100,-0.467792,0.4]])
+    y=np.abs(norm(F.X.T-obstacle,axis=1)-1.5)
+    
+    z=F.X.T[y<0.05]
+    z1=F.s[y<0.05].reshape((-1,1))
     print('Lenght:', np.round(p.s_max, 2), 'm')
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2)
+    kmeans.fit(z1)
+    # Get the cluster labels for each point
+    labels = kmeans.labels_
+    # Separate points into two sets based on the cluster labels
+    points_set1 = z1[labels == 0].flatten()
+    points_set2 = z1[labels == 1].flatten()
+    
+    points_set1=p.local_info(points_set1).X.T
+    points_set2=p.local_info(points_set2).X.T
+    # print(time()-t0)
+    # print(points_set1.shape)
+    # print(points_set1.shape)
+    points=np.array([p.local_info(2.5).X,p.local_info(7).X,obstacle[0],*points_set2])
+    t=np.linspace(0,2*pi,100)
+    circle=1.5*np.array([np.cos(t),np.sin(t),t*0])+obstacle.T
+
+    scatter.setData(pos=points)
     plot.plot(F.X[0], F.X[1], pen={'color': '#0e70ec', 'width': 2})
+    # plot.plot(x=circle[0],y=circle[1], pen={'color': '#0e70ec', 'width': 2})
+    # scatter.setData(pos=obstacle.reshape((-1,3)))
+    # plot.plot(F.s, y, pen={'color': '#0e70ec', 'width': 2})
 
-    s = p.s
-    k1 = p.s_to_k1(p.s)
-    k2 = p.s_to_k2(p.s)
-    C = p.s_to_C(p.s)
-    Tr = p.s_to_Tr(p.s)
-    T = p.s_to_T(s)
-    N = p.s_to_N(s)
-    B = p.s_to_B(s)
+    # s = p.s
+    # k1 = p.s_to_k1(p.s)
+    # k2 = p.s_to_k2(p.s)
+    # C = p.s_to_C(p.s)
+    # Tr = p.s_to_Tr(p.s)
+    # T = p.s_to_T(s)
+    # N = p.s_to_N(s)
+    # B = p.s_to_B(s)
 
-    dT = k1*N+k2*B
-    dN = -k1*T
-    dB = -k2*T
+    # dT = k1*N+k2*B
+    # dN = -k1*T
+    # dB = -k2*T
 
-    Rpath = p.s_to_R(s)[:, :, 0]
-    dRpath = p.s_to_dR(s)[:, :, 2]
+    # Rpath = p.s_to_R(s)[:, :, 0]
+    # dRpath = p.s_to_dR(s)[:, :, 2]
 
     plot.showGrid(x=True, y=True)
     plot.show()

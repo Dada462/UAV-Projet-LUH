@@ -8,11 +8,11 @@ from numpy import pi
 from pyqtgraph.Qt import QtCore, QtWidgets, QtGui
 from PyQt5.QtGui import QPainter, QBrush, QPen
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLineEdit, QLabel
-from std_msgs.msg import Float64
 from PyQt5.QtCore import Qt
 import pyqtgraph.opengl as gl
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import String
+from geometry_msgs.msg import TwistStamped,Vector3
 pg.setConfigOptions(antialias=True)
 
 
@@ -228,28 +228,28 @@ class MainWindow(QtWidgets.QMainWindow):
         start_mission = QPushButton(self)
         stop_mission = QPushButton(self)
         reset_mission = QPushButton(self)
-        # keyboard_mode = QPushButton(self)
+        keyboard_mode = QPushButton(self)
         land_button = QPushButton(self)
 
         start_mission.setText('Follow Path')
         stop_mission.setText('Home')
         hover.setText('Hover')
         reset_mission.setText('Reset Data')
-        # keyboard_mode.setText('Keyboard')
+        keyboard_mode.setText('Keyboard')
         land_button.setText('Land')
 
         start_mission.setGeometry(QtCore.QRect(0, 0, 100, 25))
         stop_mission.setGeometry(QtCore.QRect(105, 0, 100, 25))
         hover.setGeometry(QtCore.QRect(205, 0, 100, 25))
         reset_mission.setGeometry(QtCore.QRect(305, 0, 100, 25))
-        # keyboard_mode.setGeometry(QtCore.QRect(405, 0, 100, 25))
+        keyboard_mode.setGeometry(QtCore.QRect(505, 0, 100, 25))
         land_button.setGeometry(QtCore.QRect(405, 0, 100, 25))
 
         start_mission.clicked.connect(self.start_recording_mission)
         stop_mission.clicked.connect(self.stop_recording_mission)
         hover.clicked.connect(self.hover_pub)
         reset_mission.clicked.connect(self.reset_mission_data)
-        # keyboard_mode.clicked.connect(self.keyboard_mode)
+        keyboard_mode.clicked.connect(self.keyboard_pub)
         land_button.clicked.connect(self.land_pub)
 
         self.robot_info_label_1 = QLabel(self)
@@ -272,6 +272,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state = None
         self.pfc = PF_controller
         self.path_points=np.zeros((1,3))
+        self.oa_path_points=np.zeros((1,3))
         self.i = 0
 
         # Position trace
@@ -281,6 +282,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(self.trace)
 
         if __name__ != '__main__':
+            self.speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
             # Path
             self.path = gl.GLLinePlotItem(
                 color='#3486F4', width=3, antialias=True)
@@ -402,10 +404,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if event.key() in keys:
             self.keyboard[keys[event.key()]] = 0
 
-    def keyboard_mode(self):
-        self.mission_state['start'] = False
-        self.mission_state['keyboard'] = True
-
     def update_values(self):
         for i in range(self.nb_of_params):
             v = float(self.textBoxes[i].text())
@@ -431,10 +429,25 @@ class MainWindow(QtWidgets.QMainWindow):
                                      self.state[:3], faces=self.vehicle_mesh.faces, faceColors=self.vehicle_mesh.colors)
             self.trace.setData(pos=self.positions[:self.pos_counter, :3])
             self.path.setData(pos=self.path_points)
+            self.oa_path.setData(pos=self.oa_path_points)
             self.point_to_follow.setData(pos=self.s_pos)
             self.velodyne.setData(pos=self.vel)
             self.i += 1
             self.keyboard = self.w.keyboard
+
+            if self.mission_state['keyboard']:
+                u=self.keyboard
+                u=np.array([[1,-1,0,0,0,0,0,0],
+                            [0,0,1,-1,0,0,0,0],
+                            [0,0,0,0,0,0,1,-1],
+                            [0,0,0,0,1,-1,0,0]])@u
+                msg=TwistStamped()
+                Rm=Rotation.from_euler('XYZ',self.state[6:9],degrees=False)
+                u[:3]=Rm.apply(u[:3])
+                dz=1.5*(1.5-self.state[2])-1*self.state[5]
+                msg.twist.linear=Vector3(*1*u[:2],dz)
+                msg.twist.angular=Vector3(0,0,3.5*u[3])
+                self.speed_pub.publish(msg)
 
     def start_recording_mission(self):
         # Reinitialize the data
@@ -462,11 +475,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mission_state['keyboard'] = False
         # self.pfc.s=0
         # self.positions=self.positions*0
+    
+    def keyboard_pub(self):
+        self.mission_state['keyboard']=True
+        self.commands_sender.publish(String('KEYBOARD'))
 
     def hover_pub(self):
+        self.mission_state['keyboard']=False
         self.commands_sender.publish(String('HOVER'))
 
     def land_pub(self):
+        self.mission_state['keyboard']=False
         self.commands_sender.publish(String('LAND'))
         # self.commands_sender.publish(String('KEYBOARD'))
 
