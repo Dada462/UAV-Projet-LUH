@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import numpy as np
 from numpy.linalg import norm
 from numpy import pi, cos, sin
@@ -80,6 +81,10 @@ class Path_3D():
         ds = norm(df, axis=0)
         s = np.cumsum(ds)
         s = s-s[0]
+        # Checking if the path sent was correct
+        if np.isnan(ds).any() or np.isinf(ds).any():
+            raise ValueError('Two consecutives waypoints are the same, check the path planner')
+
 
         d2f_ds = np.gradient(df/ds, axis=1)
         C = norm(d2f_ds/ds, axis=0)
