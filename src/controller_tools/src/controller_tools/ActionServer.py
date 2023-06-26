@@ -225,7 +225,7 @@ class ActionServer():
     def batteryCallback(self, msg):
         self.battery_voltage = msg.voltage
         self.battery_too_low = self.battery_voltage < self.battery_threshold
-
+        # /diagnostics
 
 if __name__ == '__main__':
     try:

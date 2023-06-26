@@ -70,6 +70,7 @@ class PFController():
                     s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_pid()
+                print(u)
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp = rospy.Time().now()
