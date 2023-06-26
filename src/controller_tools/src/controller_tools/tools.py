@@ -57,7 +57,7 @@ class Path_3D():
             else:
                 self.headings = kwargs['headings']
             # self.compute_path_properties()
-            self.compute_path_properties_PTF()
+            # self.compute_path_properties_PTF()
 
     def __call__(self, s):
         return self.local_info(s)
@@ -80,12 +80,17 @@ class Path_3D():
         ds = norm(df, axis=0)
         s = np.cumsum(ds)
         s = s-s[0]
+        # Checking if the path sent was correct
+        if np.isnan(ds).any() or np.isinf(ds).any() or (ds==0).any():
+            print('[ERROR] Two consecutives waypoints are the same, check the path planner')
+            path_computed_successfully=False
+            return path_computed_successfully
+        T = df/ds  # Columns
 
-        d2f_ds = np.gradient(df/ds, axis=1)
+        d2f_ds = np.gradient(T, axis=1)
         C = norm(d2f_ds/ds, axis=0)
         dC = np.gradient(C)/ds
 
-        T = df/ds  # Columns
         # V0=np.cross(np.array([0,0,1]),T[:,0])
         V0 = T[:, 0]
         for x in [np.array([0, 0, 1]), np.array([0, 1, 0]), np.array([1, 0, 0])]:
@@ -165,7 +170,9 @@ class Path_3D():
         self.s_to_headings = interpolate.interp1d(s, self.headings)
         
         self.s_to_df = interpolate.interp1d(s, T)
-        # print(np.min(np.abs(ds)))
+
+        path_computed_successfully=True
+        return path_computed_successfully
 
     def compute_path_properties(self):
         points = self.points.T

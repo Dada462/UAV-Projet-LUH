@@ -169,17 +169,20 @@ def main():
    
     
 
-    rng=liney_range
-    f=liney
+    # rng=liney_range
+    # f=liney
 
-    nb_points=250
-    plot_points=np.zeros((nb_points,3))
-    for i,t in enumerate(np.linspace(*rng,nb_points)):
-        p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        plot_points[i]=f(t)
-        p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
-    
-    # # Spiral
+    # nb_points=250
+    # plot_points=np.zeros((nb_points,3))
+    # for i,t in enumerate(np.linspace(*rng,nb_points)):
+    #     p.poses.append(Pose(Point(*f(t)),Quaternion()))
+    #     plot_points[i]=f(t)
+    #     p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+    p.poses.append(Pose(Point(1,1,1),Quaternion()))
+    p.poses.append(Pose(Point(1,1,1),Quaternion()))
+    p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+    p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+    # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]
     # a=np.array([xpoints,ypoints])
     # a=R(-pi/2,'2D')@a

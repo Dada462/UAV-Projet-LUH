@@ -52,6 +52,7 @@ class ActionServer():
         self.followPathServer.start()
         self.TakeoffServer.start()
         self.LandServer.start()
+        
 
     def userInputCallback(self, msg):
         self.userInput = msg.data
@@ -90,9 +91,12 @@ class ActionServer():
             self.followPathServer.set_aborted(result)
             print('CONTROL problem here 2')
             return
-        self.SM.userInput = FOLLOWPATH
-        self.pfc.init_path(points, speeds, headings)
         pathInterrupted = False
+        if not self.pfc.init_path(points, speeds, headings):
+            result.result = result.UNKNOWN_ERROR
+            self.followPathServer.set_aborted(result)
+        else:
+            self.SM.userInput = FOLLOWPATH
         while self.distance_to_goal > 0.1 and not rospy.is_shutdown():
             if self.followPathServer.is_preempt_requested() or self.SM.userInput != 'FOLLOWPATH' or self.battery_too_low:
                 pathInterrupted = True

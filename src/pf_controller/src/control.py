@@ -45,13 +45,8 @@ class PFController():
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
-        # self.p=plot2D()
         
         self.main()
-        # ros_thread = threading.Thread(target=self.main,daemon=True)
-        # ros_thread.start()
-
-        # sys.exit(app.exec_())
 
     def velodyneCallback(self,msg):
         self.vel=rn.point_cloud2.pointcloud2_to_xyz_array(msg)
@@ -178,15 +173,23 @@ class PFController():
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(2*t),0*t+15]),[0,15],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([5*cos(t),5*sin(0.9*t),10+0*t]),[-10,10],type='parametric')
         # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
+        path_computed_successfully=True
         if len(points)!=0:
-            # try:
             self.path_to_follow=Path_3D(points,speeds=speeds,headings=headings,type='waypoints')
+            if not self.path_to_follow.compute_path_properties_PTF():
+                path_computed_successfully=False
+                self.pathIsComputed=False
+                return path_computed_successfully
             # self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
             # self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,displayer=self.displayer)
             self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,pfc=self)
             self.pathIsComputed=True
             # except:
             # print('[ERROR] Path properties were not possible to compute [ERROR]')
+        else:
+            path_computed_successfully=False
+            return path_computed_successfully
+
         ############################### Sphere Path ###############################
         # f=lambda t : R(0.1*t,'x')@(np.array([5*cos(t),5*sin(t),0*t]))+np.array([0,0,15])
         # f=lambda t : np.array([1*cos(t),1*sin(t),0*t])+np.array([0,0,10])
@@ -211,6 +214,7 @@ class PFController():
         self.sOA=0
         self.ds=0
         self.OAds=0
+        return path_computed_successfully
 
     def control_lpf(self):
         state=self.state
