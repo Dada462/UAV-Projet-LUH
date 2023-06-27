@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from time import sleep
+from rospy import sleep
 import rospy
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
 from mavros_msgs.msg import State

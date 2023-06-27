@@ -7,7 +7,7 @@ from uavr_nav_msgs.msg import LandAction, LandFeedback, LandResult
 from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Float32MultiArray
 from numpy import array, inf, round
-from time import sleep
+from rospy import sleep
 
 
 class ActionServer():
