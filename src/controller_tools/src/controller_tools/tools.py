@@ -76,15 +76,51 @@ class Path_3D():
 
     def compute_path_properties_PTF(self):
         points = self.points.T
+        # each column of points is a point
         df = np.gradient(points, axis=1)
         ds = norm(df, axis=0)
+        # Checking if the path sent was correct
+        # if np.isnan(ds).any() or np.isinf(ds).any():
+        ds_check = (ds == 0)
+        if ds_check.any():
+            print('[WARNING] Two consecutives waypoints are the same, check the path planner')
+            problematic_ds=np.where(ds_check)[0]
+            points_to_reject=[]
+            for i in problematic_ds:
+                if i==0 or i == len(points.T)-1:
+                    # Add the index to the points to reject
+                    points_to_reject.append(i)
+                    if i==0:
+                        print('[WARNING] First and second points are the same. Only one waypoint will be kept')
+                    else:
+                        print('[WARNING] The last and second last points are the same. Only one waypoint will be kept')
+                else:
+                    print('[WARNING] Point {i:d} and {i2:d} are the same. Check the path planner in case it is an error.'.format(i=i,i2=i+2))
+                    # Compute ds using normal difference
+                    df[:,i]=points[:,i+1]-points[:,i]
+                    ds[i]=norm(df[:,i])
+            if 0 in points_to_reject:
+                df=df[:,1:]
+                ds=ds[1:]
+                points=points[:,1:]
+                self.speeds=self.speeds[1:]
+                self.headings=self.headings[1:]
+            if len(points.T)-1:
+                df=df[:,:-1]
+                ds=ds[:-1]
+                points=points[:,:-1]
+                self.speeds=self.speeds[:-1]
+                self.headings=self.headings[:-1]
+            print('[INFO] The waypoint error was corrected.')
+        ds_check = (ds == 0)
+        
+        if ds_check.any():
+            path_computed_successfully = False
+            return path_computed_successfully
+        path_computed_successfully = False
+        return path_computed_successfully
         s = np.cumsum(ds)
         s = s-s[0]
-        # Checking if the path sent was correct
-        if np.isnan(ds).any() or np.isinf(ds).any() or (ds==0).any():
-            print('[ERROR] Two consecutives waypoints are the same, check the path planner')
-            path_computed_successfully=False
-            return path_computed_successfully
         T = df/ds  # Columns
 
         d2f_ds = np.gradient(T, axis=1)
@@ -168,87 +204,11 @@ class Path_3D():
         # Interpolation of the speeds and headings
         self.s_to_speeds = interpolate.interp1d(s, self.speeds)
         self.s_to_headings = interpolate.interp1d(s, self.headings)
-        
+
         self.s_to_df = interpolate.interp1d(s, T)
 
-        path_computed_successfully=True
+        path_computed_successfully = True
         return path_computed_successfully
-
-    def compute_path_properties(self):
-        points = self.points.T
-        df = np.gradient(points, axis=1)
-        ds = norm(df, axis=0)
-        self.ds = ds
-        s = np.cumsum(ds)
-        s = s-s[0]
-        self.s_max = np.max(s)
-
-        d2f_ds = np.gradient(df/ds, axis=1)
-        C = norm(d2f_ds/ds, axis=0)
-        dC = np.gradient(C)/ds
-
-        s1 = df/ds
-        y1 = np.gradient(s1, axis=1)
-        y1 = y1/(norm(y1, axis=0)+1e-6)
-        w1 = np.cross(s1, y1, axis=0)
-
-        ds1 = np.gradient(s1, axis=1)/ds
-        dy1 = np.gradient(y1, axis=1)/ds
-        dw1 = np.gradient(w1, axis=1)/ds
-
-        n = ds1.shape[1]
-        dR = np.zeros((n, 3, 3))
-        # for i in range(n):
-        #     dR[i]=np.array([ds1[:,i],dy1[:,i],dw1[:,i]]).T
-        # print(dR[i])
-        # print(ds1[:,i],dy1[:,i],dw1[:,i])
-
-        dR = np.stack((ds1.T, dy1.T, dw1.T), axis=1)
-        dR = np.transpose(dR, axes=(0, 2, 1))
-
-        # R=np.stack((s1.T,y1.T,w1.T),axis=1)
-        # R=np.transpose(dR,axes=(0,2,1))
-
-        Tr = -np.sum(dw1*y1, axis=0)
-        dTr = np.gradient(Tr)/ds
-
-        self.s = s
-        s_to_XYZ = interpolate.interp1d(s, points)
-        s_to_C = interpolate.interp1d(s, C)
-        s_to_dC = interpolate.interp1d(s, dC)
-        s_to_s1 = interpolate.interp1d(s, s1)
-        s_to_y1 = interpolate.interp1d(s, y1)
-        s_to_w1 = interpolate.interp1d(s, w1)
-        s_to_dsyw = interpolate.interp1d(s, dR, axis=0)
-        s_to_Tr = interpolate.interp1d(s, Tr)
-        s_to_dTr = interpolate.interp1d(s, dTr)
-
-        self.s_to_C = s_to_C
-        self.s_to_dC = s_to_dC
-        self.s_to_XY = s_to_XYZ
-        self.s_to_s1 = s_to_s1
-        self.s_to_y1 = s_to_y1
-        self.s_to_w1 = s_to_w1
-        self.s_to_dsyw = s_to_dsyw
-        self.s_to_Tr = s_to_Tr
-        self.s_to_dTr = s_to_dTr
-
-        s_to_ds1 = interpolate.interp1d(s, ds1)
-        s_to_dy1 = interpolate.interp1d(s, dy1)
-        s_to_dw1 = interpolate.interp1d(s, dw1)
-        self.s_to_ds1 = s_to_ds1
-        self.s_to_dy1 = s_to_dy1
-        self.s_to_dw1 = s_to_dw1
-
-        # def gauss(x):
-        #     return np.exp(-x**2/2)/np.sqrt(2*pi)
-
-        # T = np.linspace(-1, 1, 100)*2
-        # k = gauss(T)
-        # k = k/np.sum(k)*2
-        # y = np.convolve(dC, k, mode='same')
-        # yd = np.abs(C[0]+np.cumsum(y*ds))
-        # self.max_speed = interpolate.interp1d(s, yd)
 
     def local_info(self, s):
         local_property = pathInfo()
@@ -288,7 +248,7 @@ if __name__ == '__main__':
     plot = pg.plot(pen={'color': '#0e70ec', 'width': 2}, background='w')
     plot.resize(1200, 850)
     plot.move(300, 115)
-    scatter=pg.ScatterPlotItem(pen={'color': '#0e70ec', 'width': 2})
+    scatter = pg.ScatterPlotItem(pen={'color': '#0e70ec', 'width': 2})
     plot.addItem(scatter)
 
     # f=lambda t : R(0.15,'x')@np.array([1*(1+0.25*np.sin(4*t))*np.cos(t),1*(1+0.25*np.sin(4*t))*np.sin(t),0*t+0.5])
@@ -304,10 +264,12 @@ if __name__ == '__main__':
     n = 6
     a, b = 1, 4
 
-    n=6
-    a,b=1,4
-    uturn=lambda t: np.array([-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n))+1,-a*np.cos(t),0*t+0.5])
-    uturn_range= (-pi,0)
+    n = 6
+    a, b = 1, 4
+
+    def uturn(t): return np.array(
+        [-2+b*np.sign(np.sin(-t))*((1-np.cos(t)**n)**(1/n))+1, -a*np.cos(t), 0*t+0.5])
+    uturn_range = (-pi, 0)
     # def uturn(t): return np.array(
     #     [1*np.cos(t), np.sign(np.sin(t))*(r**n-(r*np.cos(t))**n)**(1/n), 0*t+1.5])
 
@@ -345,14 +307,15 @@ if __name__ == '__main__':
     # print(points.shape)
     p = Path_3D(points, headings=np.ones(
         len(points[0]))*5, speeds=np.ones(len(points[0]))*69, type='waypoints')
+    p.compute_path_properties_PTF()
     # p=Path_3D(f,range=[0,2*pi],type='parametric')
     F = p.local_info(p.s)
     # obstacle=np.array([-0.467792,-2.359100,0.4])
-    obstacle=np.array([[2.359100,-0.467792,0.4]])
-    y=np.abs(norm(F.X.T-obstacle,axis=1)-1.5)
-    
-    z=F.X.T[y<0.05]
-    z1=F.s[y<0.05].reshape((-1,1))
+    obstacle = np.array([[2.359100, -0.467792, 0.4]])
+    y = np.abs(norm(F.X.T-obstacle, axis=1)-1.5)
+
+    z = F.X.T[y < 0.05]
+    z1 = F.s[y < 0.05].reshape((-1, 1))
     print('Lenght:', np.round(p.s_max, 2), 'm')
     from sklearn.cluster import KMeans
     kmeans = KMeans(n_clusters=2)
@@ -362,15 +325,16 @@ if __name__ == '__main__':
     # Separate points into two sets based on the cluster labels
     points_set1 = z1[labels == 0].flatten()
     points_set2 = z1[labels == 1].flatten()
-    
-    points_set1=p.local_info(points_set1).X.T
-    points_set2=p.local_info(points_set2).X.T
+
+    points_set1 = p.local_info(points_set1).X.T
+    points_set2 = p.local_info(points_set2).X.T
     # print(time()-t0)
     # print(points_set1.shape)
     # print(points_set1.shape)
-    points=np.array([p.local_info(2.5).X,p.local_info(7).X,obstacle[0],*points_set2])
-    t=np.linspace(0,2*pi,100)
-    circle=1.5*np.array([np.cos(t),np.sin(t),t*0])+obstacle.T
+    points = np.array(
+        [p.local_info(2.5).X, p.local_info(7).X, obstacle[0], *points_set2])
+    t = np.linspace(0, 2*pi, 100)
+    circle = 1.5*np.array([np.cos(t), np.sin(t), t*0])+obstacle.T
 
     scatter.setData(pos=points)
     plot.plot(F.X[0], F.X[1], pen={'color': '#0e70ec', 'width': 2})

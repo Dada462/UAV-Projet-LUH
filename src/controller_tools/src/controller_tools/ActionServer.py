@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 import actionlib
 from uavr_nav_msgs.msg import FollowPathAction, FollowPathFeedback, FollowPathResult
@@ -89,12 +89,13 @@ class ActionServer():
                 print('[INFO] Cannot follow the path, battery is too low: ', round(
                     self.battery_voltage, 2), 'V', '< ', self.battery_threshold, 'V')
             self.followPathServer.set_aborted(result)
-            print('CONTROL problem here 2')
             return
         pathInterrupted = False
         if not self.pfc.init_path(points, speeds, headings):
+            print('[FAIL] Path computation, check path planner')
             result.result = result.UNKNOWN_ERROR
             self.followPathServer.set_aborted(result)
+            return
         else:
             self.SM.userInput = FOLLOWPATH
         while self.distance_to_goal > 0.1 and not rospy.is_shutdown():

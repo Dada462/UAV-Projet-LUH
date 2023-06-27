@@ -175,10 +175,10 @@ class PFController():
         # self.path_to_follow=Path_3D(lambda t : np.array([2*cos(t),2*sin(t),0*t+10]),[-10,30],type='parametric')
         path_computed_successfully=True
         if len(points)!=0:
+            self.pathIsComputed=False
             self.path_to_follow=Path_3D(points,speeds=speeds,headings=headings,type='waypoints')
             if not self.path_to_follow.compute_path_properties_PTF():
                 path_computed_successfully=False
-                self.pathIsComputed=False
                 return path_computed_successfully
             # self.displayer.path.setData(pos=self.path_to_follow.points[:,:3])
             # self.oa=oa_alg(ptf=self.path_to_follow,dt=1/30,r0=1,displayer=self.displayer)

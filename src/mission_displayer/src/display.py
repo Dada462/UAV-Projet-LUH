@@ -29,25 +29,10 @@ class MD():
         sys.exit(app.exec_())
     
     def main(self):
-        speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
         f=10
         rate = rospy.Rate(f)
 
         while not rospy.is_shutdown():
-            Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False)
-            if False:
-                u=self.displayer.keyboard
-                u=np.array([[1,-1,0,0,0,0,0,0],
-                            [0,0,1,-1,0,0,0,0],
-                            [0,0,0,0,0,0,1,-1],
-                            [0,0,0,0,1,-1,0,0]])@u
-
-                msg=TwistStamped()
-                u[:3]=Rm.apply(u[:3])
-                dz=1.5*(0.5-self.state[2])-1*self.state[5]
-                msg.twist.linear=Vector3(*1*u[:2],dz)
-                msg.twist.angular=Vector3(0,0,3.5*u[3])
-                speed_pub.publish(msg)
             rate.sleep()
     
     def update_state_1(self,data):
