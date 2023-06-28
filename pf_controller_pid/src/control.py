@@ -63,6 +63,7 @@ class PFController():
         s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
+        self.closest_obstacle_distance=np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
