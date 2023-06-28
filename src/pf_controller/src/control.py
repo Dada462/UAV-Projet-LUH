@@ -39,14 +39,18 @@ class PFController():
         rospy.Subscriber('/mavros/imu/data', Imu, self.imuCallback)
         rospy.Subscriber('/velodyne', PointCloud2, self.velodyneCallback)
         
-        # app = QtWidgets.QApplication(sys.argv)
-        # self.displayer=MainWindow(self)
+        app = QtWidgets.QApplication(sys.argv)
+        self.p=plot2D()
         self.sm=RobotModeState()
         self.pathAction=ActionServer(self)
         self.pathIsComputed=False
         self.init_path()
         
-        self.main()
+        # self.main()
+        ros_thread = threading.Thread(target=self.main,daemon=True)
+        ros_thread.start()
+        sys.exit(app.exec_())
+        
 
     def velodyneCallback(self,msg):
         self.vel=rn.point_cloud2.pointcloud2_to_xyz_array(msg)
@@ -82,6 +86,8 @@ class PFController():
         self.m=Map(50,500)
         self.state=np.zeros(12)
         self.closest_obstacle_distance=np.inf
+        self.t0=rospy.Time.now().to_time()
+            
         while not rospy.is_shutdown():
             Rm=Rotation.from_euler('XYZ',angles=self.state[6:9],degrees=False)
             if self.pathIsComputed:
@@ -130,6 +136,7 @@ class PFController():
                     self.oa.sOA=self.sOA
                     self.sOA=self.sOA+1/f*self.dsOA
                     self.sOA=max(0,self.sOA)
+                    s_pos=self.oa.oa_ptf.local_info(self.sOA).X
                 else:
                     u,heading,ds=self.control_pid_1(self.s,self.path_to_follow)
                     self.ds=ds
@@ -475,13 +482,15 @@ class PFController():
 
         # Error and its derivatives
         e = Rpath.T@(X-F.X)
+        
         s1, y1, w1 = e
         # S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
         S=np.array([F.k2*w1+F.k1*y1+1,-F.k1*s1,-F.k2*s1]) # PTF
         Vp=Rtheta@Vr
         ks=2
         ds=Vp[0]+ks*s1
-        if s<0.05 and ds < 0:
+        if s<0.05 and ds < 0 or ptf.s_max-s<0.03 and ds >0:
+        # if s<0.05 and ds < 0:
             ds=0
         # self.OAds=ds
         dRpath=ds*F.dR
@@ -490,7 +499,6 @@ class PFController():
         ds1, dy1,dw1 = de
         # print("|de|",(dy1**2+dw1**2)**0.5,'de',de,'s',s,'ds',ds,'S',S,Rtheta@Vr)
         # dS=np.array([-F.dC*ds*y1-F.C*dy1, F.dC*ds*s1 +F.C*ds1 -dw1*F.Tr-w1*F.dTr*ds,F.Tr*dy1+F.dTr*ds*y1])
-
         self.error=100*np.linalg.norm(e,ord=np.inf)
         
         
@@ -526,7 +534,14 @@ class PFController():
         dVr=Rtheta.T@(dVp-dRtheta@Vr)
         dVr=dVr+self.adj(wr)@Vr
         dVr=Kth*np.tanh(dVr/Kth)
+        t=rospy.Time.now().to_time()-self.t0
+        if OA:
+            self.p.plot(t,e1[0],id='y1',color='cornflowerblue')
+            self.p.plot(t,e1[1],id='w1',color='cornflowerblue')
+        else:
+            self.p.plot(t,ve,id='ve',color='tomato')
 
+        
         return dVr,heading,ds
     
     def update_state(self,data):

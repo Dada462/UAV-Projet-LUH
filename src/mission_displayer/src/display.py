@@ -22,6 +22,7 @@ class MD():
         rospy.Subscriber('/path/points/ptf', Float32MultiArray, self.path_points_callback)
         rospy.Subscriber('/path/points/oa', Float32MultiArray, self.oa_path_points_callback)
         # rospy.Subscriber('/velodyne', PointCloud2, self.velodyneCallback)
+        # self.p=plot2D()
         
         
         ros_thread = threading.Thread(target=self.main,daemon=True)
@@ -31,8 +32,11 @@ class MD():
     def main(self):
         f=10
         rate = rospy.Rate(f)
-
+        # t0=rospy.Time.now().to_time()
         while not rospy.is_shutdown():
+            # t=rospy.Time.now().to_time()-t0
+            # self.p.plot(t,1,id='1',color='cornflowerblue')
+            # print(t)
             rate.sleep()
     
     def update_state_1(self,data):

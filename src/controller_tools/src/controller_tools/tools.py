@@ -80,7 +80,6 @@ class Path_3D():
         df = np.gradient(points, axis=1)
         ds = norm(df, axis=0)
         # Checking if the path sent was correct
-        # if np.isnan(ds).any() or np.isinf(ds).any():
         ds_check = (ds == 0)
         if ds_check.any():
             print('[WARNING] Two consecutives waypoints are the same, check the path planner')
@@ -113,12 +112,10 @@ class Path_3D():
                 self.headings=self.headings[:-1]
             print('[INFO] The waypoint error was corrected.')
         ds_check = (ds == 0)
-        
         if ds_check.any():
+            print('ERROR')
             path_computed_successfully = False
             return path_computed_successfully
-        path_computed_successfully = False
-        return path_computed_successfully
         s = np.cumsum(ds)
         s = s-s[0]
         T = df/ds  # Columns
@@ -206,7 +203,7 @@ class Path_3D():
         self.s_to_headings = interpolate.interp1d(s, self.headings)
 
         self.s_to_df = interpolate.interp1d(s, T)
-
+        print('got hereeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
         path_computed_successfully = True
         return path_computed_successfully
 

@@ -175,7 +175,7 @@ class oa_alg:
         # s_S2=s_S2
         # F = self.ptf.local_info(s_S2)
         # S2 = F.X
-        print(s_S1,s_S2)
+        # print(s_S1,s_S2)
 
 
         r1 = S1-closest_point
@@ -186,35 +186,12 @@ class oa_alg:
         angle_sign = np.sign(np.cross(r1, r2)[-1])
         th0 = np.arccos(dot_prod)*angle_sign
         if first_time:
-            # print('got the first time: ',angle_sign)
             self.rot_dir=angle_sign
         else:
-            # print('this is the angle before',180*th0/pi,S1,S2,angle_sign)
             if self.rot_dir*angle_sign<0:
-                # print('here')
                 th0=th0*self.rot_dir
                 th0=th0%(2*pi)
                 th0=th0*self.rot_dir
-            # print('this is the angle before',180*th0/pi,S1,S2,angle_sign)
-
-
-            # print('before',180*th0/pi,self.rot_dir,cross_prod,'CP',closest_point,'X',X)
-            # if self.rot_dir>0 and cross_prod<0:
-            #     th0=-th0+2*pi
-            # elif self.rot_dir<0 and cross_prod>0:
-            #     th0=th0-2*pi
-            # print('after',180*th0/pi,self.rot_dir)
-        # dist_to_path=norm(self.ptf.local_info(sptf).X-X)
-        # max_distance_to_path=0.15
-        # print(dist_to_path)
-        # if dist_to_path>max_distance_to_path:
-        #     if not first_time:
-        #         if cross_prod*self.rot_dir<0:
-        #             th0=th0-2*pi
-        #             cross_prod=self.rot_dir
-        # th0 = th0*cross_prod
-        
-        # th0=2*pi*np.sign(th0)
         theta = np.zeros((40, 3))
         theta[:, -1] = np.linspace(0, th0, 40)
         rot_obstacle = Rotation.from_rotvec(theta)
@@ -222,7 +199,8 @@ class oa_alg:
         waypoints = waypoints.T
         self.oa_ptf = Path_3D(waypoints, headings=np.zeros(
             len(waypoints[0])), speeds=np.ones(len(waypoints[0]))*0.5, type='waypoints')
-        # self.displayer.oa_path.setData(pos=self.oa_ptf.points[:, :3])
+        self.oa_ptf.compute_path_properties_PTF()
+        self.pfc.sOA=self.oa_ptf.s_max/2
         self.oa = True
         self.first_time = False
         self.current_obstacle = closest_point
