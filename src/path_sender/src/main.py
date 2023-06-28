@@ -184,18 +184,23 @@ def main():
 
     nb_points=250
     plot_points=np.zeros((nb_points,3))
+    
+    
     for i,t in enumerate(np.linspace(*rng,nb_points)):
-        # if i in [50,75,100,125]:
-        #     t=np.linspace(*rng,nb_points)[i-2]
-        #     p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        #     plot_points[i]=f(t)
-        #     p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
-        # else:
-        # p.poses.append(Pose(Point(*(f(t)-f(uturn_range[0]) + X)),Quaternion()))
-        p.poses.append(Pose(Point(*f(t)),Quaternion()))
-        plot_points[i]=f(t)
-        p.velocities.append(Twist(Vector3(0.75,0,0),Vector3(0,0,1)))
-
+        if i in [50]:
+            t=np.linspace(*rng,nb_points)[i-2]
+            p.poses.append(Pose(Point(*f(t)),Quaternion()))
+            plot_points[i]=f(t)
+            p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,0)))
+        else:
+            # p.poses.append(Pose(Point(*(f(t)-f(uturn_range[0]) + X)),Quaternion()))
+            p.poses.append(Pose(Point(*f(t)),Quaternion()))
+            plot_points[i]=f(t)
+            p.velocities.append(Twist(Vector3(0.5,0,0),Vector3(0,0,1)))
+        
+    t=uturn_range[1]
+    p.poses.append(Pose(Point(*f(t)),Quaternion()))
+    p.velocities.append(Twist(Vector3(0.75,0,0),Vector3(0,0,1)))
     # # Spiral
     # xpoints,ypoints=[-1,-0.8,-0.5,0.5,1,0.5,0],[-2,1.5,1.5,1.5,1.5,1.5,-1.5]
     # a=np.array([xpoints,ypoints])

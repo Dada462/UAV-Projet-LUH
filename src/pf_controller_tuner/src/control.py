@@ -62,6 +62,7 @@ class PFController():
         s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
+        self.closest_obstacle_distance=np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
@@ -173,7 +174,7 @@ class PFController():
         dt = 1/30
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
+            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
         dRm = Rm@self.adj(wr)
 
         X = X+3*dt*Rm@Vr
@@ -229,10 +230,10 @@ class PFController():
         Vp = -Vpath*np.tanh(e1/kpath)+np.array([ve, 0, 0])
 
         Rd = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
+            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
         data = Rd@self.imuData
         Rd1 = Rotation.from_euler(
-            'XYZ', [0, 0, self.state[8]], degrees=False).as_dcm()
+            'XYZ', [0, 0, self.state[8]], degrees=False).as_matrix()
         data = Rd1.T@data
         data[2] = data[2]-9.81
 
@@ -258,7 +259,7 @@ class PFController():
         wr = self.state[9:12]
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
+            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
         dRm = Rm@self.adj(wr)
 
         # Path properties
