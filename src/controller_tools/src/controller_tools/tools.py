@@ -3,6 +3,7 @@ from numpy.linalg import norm
 from numpy import pi, cos, sin
 from scipy import interpolate
 from scipy.spatial.transform import Rotation
+from datetime import datetime
 
 
 def sawtooth(x):
@@ -79,47 +80,66 @@ class Path_3D():
         # each column of points is a point
         df = np.gradient(points, axis=1)
         ds = norm(df, axis=0)
+
         # Checking if the path sent was correct
         ds_check = (ds == 0)
         if ds_check.any():
-            print('[WARNING] Two consecutives waypoints are the same, check the path planner')
-            problematic_ds=np.where(ds_check)[0]
-            points_to_reject=[]
+            print(
+                '[WARNING] Two consecutives waypoints are the same, check the path planner')
+            problematic_ds = np.where(ds_check)[0]
+            points_to_reject = []
             for i in problematic_ds:
-                if i==0 or i == len(points.T)-1:
+                if i == 0 or i == len(points.T)-1:
                     # Add the index to the points to reject
                     points_to_reject.append(i)
-                    if i==0:
-                        print('[WARNING] First and second points are the same. Only one waypoint will be kept')
+                    if i == 0:
+                        print(
+                            '[WARNING] First and second points are the same. Only one waypoint will be kept')
                     else:
-                        print('[WARNING] The last and second last points are the same. Only one waypoint will be kept')
+                        print(
+                            '[WARNING] The last and second last points are the same. Only one waypoint will be kept')
                 else:
-                    print('[WARNING] Point {i:d} and {i2:d} are the same. Check the path planner in case it is an error.'.format(i=i,i2=i+2))
+                    print('[WARNING] Point {i:d} and {i2:d} are the same. Check the path planner in case it is an error.'.format(
+                        i=i, i2=i+2))
                     # Compute ds using normal difference
-                    df[:,i]=points[:,i+1]-points[:,i]
-                    ds[i]=norm(df[:,i])
+                    # print('ds before',ds[i],'df before',df[:,i])
+                    # df[:,i]=points[:,i+1]-points[:,i]
+                    # ds[i]=norm(df[:,i])
+                    # print('ds after',ds[i],'df after',df[:,i])
+                    now = datetime.now()
+                    dt_string = now.strftime("%d.%m.%Y_%H.%M.%S")
+                    path_name = 'path_'+dt_string+'.npy'
+                    np.save(path_name, self.points)
+                    print(
+                        '[ERROR] Check the path planner. The path received was saved as '+path_name)
+                    path_computed_successfully = False
+                    return path_computed_successfully
             if 0 in points_to_reject:
-                df=df[:,1:]
-                ds=ds[1:]
-                points=points[:,1:]
-                self.speeds=self.speeds[1:]
-                self.headings=self.headings[1:]
+                df = df[:, 1:]
+                ds = ds[1:]
+                points = points[:, 1:]
+                self.speeds = self.speeds[1:]
+                self.headings = self.headings[1:]
             if len(points.T)-1:
-                df=df[:,:-1]
-                ds=ds[:-1]
-                points=points[:,:-1]
-                self.speeds=self.speeds[:-1]
-                self.headings=self.headings[:-1]
+                df = df[:, :-1]
+                ds = ds[:-1]
+                points = points[:, :-1]
+                self.speeds = self.speeds[:-1]
+                self.headings = self.headings[:-1]
             print('[INFO] The waypoint error was corrected.')
         ds_check = (ds == 0)
         if ds_check.any():
-            print('ERROR')
+            now = datetime.now()
+            dt_string = now.strftime("%d.%m.%Y_%H.%M.%S")
+            path_name = 'path_'+dt_string+'.npy'
+            np.save(path_name, self.points)
+            print('[ERROR] There is still an error with the path. Check the path planner. The path was saved as '+path_name)
             path_computed_successfully = False
             return path_computed_successfully
+
+        T = df/ds  # Columns
         s = np.cumsum(ds)
         s = s-s[0]
-        T = df/ds  # Columns
-
         d2f_ds = np.gradient(T, axis=1)
         C = norm(d2f_ds/ds, axis=0)
         dC = np.gradient(C)/ds
@@ -203,7 +223,6 @@ class Path_3D():
         self.s_to_headings = interpolate.interp1d(s, self.headings)
 
         self.s_to_df = interpolate.interp1d(s, T)
-        print('got hereeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
         path_computed_successfully = True
         return path_computed_successfully
 

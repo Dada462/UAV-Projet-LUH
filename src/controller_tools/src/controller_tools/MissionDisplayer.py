@@ -173,7 +173,6 @@ class plot2D(QtWidgets.QMainWindow):
             self.cursors[id] = 0
         if type(x) == np.float64 or type(x) == float or type(y) == np.float64 or type(y) == float:
             self.values[id][self.cursors[id]] = x, y
-
             self.cursors[id] += 1
         else:
             self.data_plot[id].setData(x=x, y=y)
@@ -230,6 +229,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reset_mission = QPushButton(self)
         keyboard_mode = QPushButton(self)
         land_button = QPushButton(self)
+        waypoint_button = QPushButton(self)
 
         start_mission.setText('Follow Path')
         stop_mission.setText('Home')
@@ -237,6 +237,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reset_mission.setText('Reset Data')
         keyboard_mode.setText('Keyboard')
         land_button.setText('Land')
+        waypoint_button.setText('Waypoint')
 
         start_mission.setGeometry(QtCore.QRect(0, 0, 100, 25))
         stop_mission.setGeometry(QtCore.QRect(105, 0, 100, 25))
@@ -244,6 +245,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reset_mission.setGeometry(QtCore.QRect(305, 0, 100, 25))
         keyboard_mode.setGeometry(QtCore.QRect(505, 0, 100, 25))
         land_button.setGeometry(QtCore.QRect(405, 0, 100, 25))
+        waypoint_button.setGeometry(QtCore.QRect(605, 0, 100, 25))
 
         start_mission.clicked.connect(self.start_recording_mission)
         stop_mission.clicked.connect(self.stop_recording_mission)
@@ -251,6 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reset_mission.clicked.connect(self.reset_mission_data)
         keyboard_mode.clicked.connect(self.keyboard_pub)
         land_button.clicked.connect(self.land_pub)
+        waypoint_button.clicked.connect(self.waypoint_pub)
 
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
@@ -487,7 +490,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def land_pub(self):
         self.mission_state['keyboard']=False
         self.commands_sender.publish(String('LAND'))
-        # self.commands_sender.publish(String('KEYBOARD'))
+    
+    def waypoint_pub(self):
+        self.mission_state['keyboard']=False
+        self.commands_sender.publish(String('WAYPOINT'))
 
     def reset_mission_data(self):
         # self.pfc.s = 0
