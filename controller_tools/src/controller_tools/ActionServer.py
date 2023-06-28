@@ -35,6 +35,13 @@ class ActionServer():
         self.height = -inf
         self.pfc = pfc
         self.SM = self.pfc.sm
+        self.battery_threshold = 12  # 21 V for the real drone, 12 V in simulation
+        self.battery_voltage = -inf
+        self.battery_too_low=False
+
+        rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
+        self.path_pub = rospy.Publisher(
+            '/path/points/ptf', Float32MultiArray, queue_size=1)
 
         self.followPathServer = actionlib.SimpleActionServer(
             'followPath', FollowPathAction, execute_cb=self.followPathExecute_cb)
@@ -42,12 +49,7 @@ class ActionServer():
             'Takeoff', TakeoffAction, execute_cb=self.TakeoffExecute_cb)
         self.LandServer = actionlib.SimpleActionServer(
             'Land', LandAction, execute_cb=self.LandExecute_cb)
-
-        self.battery_threshold = 12  # 21 V for the real drone, 12 V in simulation
-        self.battery_voltage = -inf
-        rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
-        self.path_pub = rospy.Publisher(
-            '/path/points/ptf', Float32MultiArray, queue_size=1)
+        
         self.followPathServer.start()
         self.TakeoffServer.start()
         self.LandServer.start()
@@ -120,6 +122,7 @@ class ActionServer():
             else:
                 result.result = result.UNKNOWN_ERROR
             self.followPathServer.set_aborted(result)
+            self.SM.userInput = 'HOVER'
 
         elif not pathInterrupted and not rospy.is_shutdown():
             F = self.pfc.path_to_follow
@@ -127,6 +130,7 @@ class ActionServer():
             print('[SUCCES] The path was successfully followed')
             result.result = result.SUCCESS
             self.followPathServer.set_succeeded(result)
+            self.SM.userInput = 'WAIT'
         self.pfc.ds = 0
         self.pfc.s = 0
         self.SM.userInput = 'WAIT'

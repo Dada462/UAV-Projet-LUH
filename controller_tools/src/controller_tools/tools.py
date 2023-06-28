@@ -78,6 +78,7 @@ class Path_3D():
 
     def compute_path_properties_PTF(self):
         points = self.points.T
+        # each column of points is a point
         df = np.gradient(points, axis=1)
         ds = norm(df, axis=0)
 
