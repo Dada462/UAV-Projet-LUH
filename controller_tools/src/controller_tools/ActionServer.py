@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 import actionlib
 from uavr_nav_msgs.msg import FollowPathAction, FollowPathFeedback, FollowPathResult
@@ -7,7 +7,7 @@ from uavr_nav_msgs.msg import LandAction, LandFeedback, LandResult
 from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Float32MultiArray
 from numpy import array, inf, round
-from time import sleep
+from rospy import sleep
 
 
 class ActionServer():
@@ -29,26 +29,27 @@ class ActionServer():
         self.accept_takeoff = True
         self.accept_landing = True
 
-        self.followPathServer = actionlib.SimpleActionServer(
-            'followPath', FollowPathAction, execute_cb=self.followPathExecute_cb)
-        self.TakeoffServer = actionlib.SimpleActionServer(
-            'Takeoff', TakeoffAction, execute_cb=self.TakeoffExecute_cb)
-        self.LandServer = actionlib.SimpleActionServer(
-            'Land', LandAction, execute_cb=self.LandExecute_cb)
-
-        self.battery_threshold = 12  # 21 V for the real drone, 12 V in simulation
-        self.battery_voltage = -inf
-        rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
-        self.path_pub = rospy.Publisher(
-            '/path', Float32MultiArray, queue_size=1)
-
         self.userInput = ''
         self.path = None
         self.distance_to_goal = inf
         self.height = -inf
         self.pfc = pfc
         self.SM = self.pfc.sm
+        self.battery_threshold = 20  # 20 V for the real drone, 12 V in simulation
+        self.battery_voltage = -inf
+        self.battery_too_low=False
 
+        rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
+        self.path_pub = rospy.Publisher(
+            '/path/points/ptf', Float32MultiArray, queue_size=1)
+
+        self.followPathServer = actionlib.SimpleActionServer(
+            'followPath', FollowPathAction, execute_cb=self.followPathExecute_cb)
+        self.TakeoffServer = actionlib.SimpleActionServer(
+            'takeoff', TakeoffAction, execute_cb=self.TakeoffExecute_cb)
+        self.LandServer = actionlib.SimpleActionServer(
+            'land', LandAction, execute_cb=self.LandExecute_cb)
+        
         self.followPathServer.start()
         self.TakeoffServer.start()
         self.LandServer.start()
@@ -64,6 +65,7 @@ class ActionServer():
         self.path = goal.path
         poses = self.path.poses
         velocities = self.path.velocities
+        self.distance_to_goal = inf
         points = []
         speeds = []
         headings = []
@@ -88,13 +90,19 @@ class ActionServer():
                 print('[INFO] Cannot follow the path, battery is too low: ', round(
                     self.battery_voltage, 2), 'V', '< ', self.battery_threshold, 'V')
             self.followPathServer.set_aborted(result)
-            print('CONTROL problem here 2')
             return
-        self.SM.userInput = FOLLOWPATH
-        self.pfc.init_path(points, speeds, headings)
         pathInterrupted = False
+        if not self.pfc.init_path(points, speeds, headings):
+            print('[FAIL] Path computation, check path planner')
+            result.result = result.UNKNOWN_ERROR
+            self.followPathServer.set_aborted(result)
+            return
+        else:
+            self.SM.userInput = FOLLOWPATH
         while self.distance_to_goal > 0.1 and not rospy.is_shutdown():
             if self.followPathServer.is_preempt_requested() or self.SM.userInput != 'FOLLOWPATH' or self.battery_too_low:
+                if self.followPathServer.is_preempt_requested():
+                    print('[FAIL] Path was cancelled by the planner')
                 pathInterrupted = True
                 break
             followPathFeedback.distance_to_goal = self.distance_to_goal
@@ -103,6 +111,7 @@ class ActionServer():
 
         result.distance_to_goal = self.distance_to_goal
         if pathInterrupted:
+            self.pfc.end_of_path = self.pfc.state[:3]
             print('[FAIL] Following the path was interrupted')
             if self.SM.state == PILOT:
                 result.result = result.USER_TOOK_OVER
@@ -113,14 +122,19 @@ class ActionServer():
             else:
                 result.result = result.UNKNOWN_ERROR
             self.followPathServer.set_aborted(result)
+            self.SM.userInput = 'HOVER'
 
         elif not pathInterrupted and not rospy.is_shutdown():
+            F = self.pfc.path_to_follow
+            self.pfc.end_of_path = F.local_info(F.s_max).X
             print('[SUCCES] The path was successfully followed')
             result.result = result.SUCCESS
             self.followPathServer.set_succeeded(result)
+            self.SM.userInput = 'WAIT'
         self.pfc.ds = 0
         self.pfc.s = 0
         self.SM.userInput = 'WAIT'
+        self.pfc.pathIsComputed = False
 
     def LandExecute_cb(self, goal):
         self.landing_successful = None
@@ -141,7 +155,8 @@ class ActionServer():
         height = self.pfc.state[2]
         LandingInterrupted = False
         while height > 0.1 and not rospy.is_shutdown():
-            if self.LandServer.is_preempt_requested() or self.SM.state == PILOT:
+            landing_error = abs(height) > 0.1 and self.SM.state != LANDING
+            if self.LandServer.is_preempt_requested() or self.SM.state == PILOT or landing_error:
                 LandingInterrupted = True
                 break
             height = self.pfc.state[2]
@@ -165,7 +180,11 @@ class ActionServer():
         result = TakeoffResult()
         Takeoff_fb = TakeoffFeedback()
         desired_height, delay = goal.agl, goal.delay
+        height = self.pfc.state[2]
+        self.pfc.takeoff_XYZ = self.pfc.state[:3]
+        self.pfc.takeoff_heading = self.pfc.state[8]
         self.SM.takeoff_alt = desired_height
+        self.SM.first_stage_alt = height+0.25
         delay = delay.to_sec()
         sleep(delay)
         if self.SM.state != LANDED:

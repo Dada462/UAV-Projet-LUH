@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped, PoseStamped
@@ -12,9 +12,9 @@ class RobotState():
         rospy.init_node('robot_state_listener', anonymous=True)
         rospy.Subscriber("/mavros/local_position/velocity_body",
                          TwistStamped, self.body_velocity_info)
-        rospy.Subscriber("/mavros/local_position/pose",
-                         PoseStamped, self.local_pose_info)
-        # rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, self.local_pose_info)
+        # rospy.Subscriber("/mavros/local_position/pose",
+        #                  PoseStamped, self.local_pose_info)
+        rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, self.local_pose_info)
         self.pub = rospy.Publisher(
             '/robot_state', Float32MultiArray, queue_size=10)
         self.robot_state_pub()

@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-from time import sleep
+#!/usr/bin/env python3
+from rospy import sleep
 import rospy
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
 from mavros_msgs.msg import State
@@ -31,6 +31,7 @@ class RobotModeState():
         self.armed = None
         self.mode = None
         self.takeoff_alt = 0.5
+        self.first_stage_alt = 0.25
         self.altitude = -1
         self.userInput = None
         self.takeoffAccepted = False
@@ -38,7 +39,7 @@ class RobotModeState():
         self.takeoff_successful = True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
-        # rospy.Subscriber('user_input', String, self.userInputCallback)
+        rospy.Subscriber('/pf_controller/user_input', String, self.userInputCallback)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
@@ -86,7 +87,10 @@ class RobotModeState():
                 if abs(self.altitude) < alt_error:
                     self.state = LANDED
                 else:
-                    self.state = HOVERING
+                    if self.armed:
+                        self.state = HOVERING
+                    else:
+                        self.state = LANDED
             elif self.state == PILOT:
                 if self.mode == LAND:
                     self.state == LANDING
@@ -94,6 +98,10 @@ class RobotModeState():
                     self.state = INIT
                 self.userInput = ''
             elif self.state == LANDED:
+                if self.altitude > 0.1 and self.armed and self.speed>0.1:
+                    print(
+                        '[WARNING] The robot should be landed but it\'s not grounded. Going into INIT State')
+                    self.state = INIT
                 if self.userInput == HOVER:
                     self.set_mode_srv(0, GUIDED)
                     sleep(0.05)
@@ -105,7 +113,7 @@ class RobotModeState():
                             break
                         else:
                             sleep(0.5)
-                    resp = self.takeoff_srv(0, 0, 0, 0, self.takeoff_alt)
+                    resp = self.takeoff_srv(0, 0, 0, 0, self.first_stage_alt)
                     self.takeoffAccepted = resp.success
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:
                         self.state = TAKEOFF
@@ -131,8 +139,12 @@ class RobotModeState():
                         self.state = HOVERING
             elif self.state == HOVERING:
                 expectedMode = GUIDED
-                if self.mode != expectedMode or self.mode == LOITER:
+                if self.mode != expectedMode:
                     self.state = PILOT
+                elif self.altitude < 0.05 or not self.armed:
+                    print(
+                        '[WARNING] The robot should be hovering but it looks grounded. Going into INIT State')
+                    self.state = INIT
                 else:
                     if self.userInput == LAND:
                         self.set_mode_srv(0, LAND)
@@ -145,8 +157,12 @@ class RobotModeState():
                         self.state = CONTROL
             elif self.state == LANDING:
                 expectedMode = LAND
-                if self.mode != expectedMode or self.mode == LOITER:
+                if self.mode != expectedMode:
                     self.state = PILOT
+                elif self.altitude > 0.05 or not self.armed:
+                    print(
+                        '[WARNING] The robot should be landing but it looks grounded on an object. Going into INIT State')
+                    self.state = INIT
                 else:
                     if abs(self.altitude) < alt_error:
                         sleep(1)

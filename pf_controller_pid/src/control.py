@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -54,15 +54,16 @@ class PFController():
             '/mavros/setpoint_raw/local', PositionTarget, queue_size=10)
         go_home_pub = rospy.Publisher(
             '/mavros/setpoint_position/local', PoseStamped, queue_size=10)
-        path_info = rospy.Publisher('/path_info', Quaternion, queue_size=10)
+        path_info = rospy.Publisher('/path/info', Quaternion, queue_size=10)
         f = 30
         rate = rospy.Rate(f)
         i = 0
         self.s = 0
         self.ds = 0
-        s_pos = np.zeros(3)
+        s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
+        self.closest_obstacle_distance=np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
@@ -70,6 +71,10 @@ class PFController():
                     s_pos-self.state[:3])+self.path_to_follow.s_max-self.s
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_pid()
+                if np.isnan(u).any() or np.isnan(heading).any() or np.isinf(u).any() or np.isinf(heading).any():
+                    print(
+                        '[WARNING] Commands are NAN or INFINITE, check the path ! Zero will be sent as command as a security measure.')
+                    u, heading = np.zeros(3), 0
                 ############################## Acceleration Topic ##############################
                 command = PositionTarget()
                 command.header.stamp = rospy.Time().now()
@@ -91,8 +96,7 @@ class PFController():
                 go_home_pub.publish(command)
                 self.s = self.ds = 0
             elif self.sm.userInput == 'WAIT':
-                wait_pos = self.path_to_follow.local_info(
-                    self.path_to_follow.s_max).X
+                wait_pos = self.end_of_path
                 command = PoseStamped()
                 command.pose.position = Point(*wait_pos)
                 q = Rotation.from_euler(
@@ -103,6 +107,25 @@ class PFController():
             elif self.sm.state == 'HOVERING' or self.sm.state == 'STOPPING':
                 speed_pub.publish(TwistStamped())
                 self.s = self.ds = 0
+            elif self.sm.state == 'TAKEOFF':
+                height = self.state[2]
+                if height > 0.15:
+                    takeoff_command = self.takeoff_control()
+                    if np.isnan(takeoff_command).any() or np.isnan(self.takeoff_heading).any() or np.isinf(takeoff_command).any() or np.isinf(self.takeoff_heading).any():
+                        print(
+                            '[WARNING] Takeoff commands are NAN or INFINITE ! Zero will be sent as command as a security measure.')
+                        takeoff_command, self.takeoff_heading = np.zeros(3), 0
+                    ############################## Acceleration Topic ##############################
+                    command = PositionTarget()
+                    command.header.stamp = rospy.Time().now()
+                    command.coordinate_frame = PositionTarget.FRAME_BODY_NED
+                    command.type_mask = PositionTarget.IGNORE_PX + PositionTarget.IGNORE_PY + PositionTarget.IGNORE_PZ + \
+                        PositionTarget.IGNORE_VX+PositionTarget.IGNORE_VY+PositionTarget.IGNORE_VZ
+                    command.type_mask = command.type_mask+PositionTarget.IGNORE_YAW
+                    command.acceleration_or_force = Vector3(*takeoff_command)
+                    command.yaw_rate = 0.5 * \
+                        sawtooth(self.takeoff_heading-self.state[8])
+                    accel_command_pub.publish(command)
             path_info.publish(Quaternion(*s_pos, self.error))
             self.s = self.s+1/f*self.ds
             self.s = max(0, self.s)
@@ -111,11 +134,20 @@ class PFController():
 
     def init_path(self, points=[], speeds=[], headings=[]):
         if len(points) != 0:
+            self.pathIsComputed = False
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')
-            self.pathIsComputed = True
+            if not self.path_to_follow.compute_path_properties_PTF():
+                path_computed_successfully = False
+                return path_computed_successfully
+        else:
+            path_computed_successfully = False
+            return path_computed_successfully
         self.s = 0
         self.ds = 0
+        self.pathIsComputed = True
+        path_computed_successfully = True
+        return path_computed_successfully
 
     def control_pid(self):
         # Robot state
@@ -173,7 +205,8 @@ class PFController():
         d_path = np.linalg.norm(e1/kpath)
         ve = vc*(1-np.tanh(d_path))
         dve = -vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
-        if ((self.path_to_follow.s_max-self.s) < 1):
+        safety_distance = np.clip(1.5*vc, 1, 2.5)
+        if ((self.path_to_follow.s_max-self.s) < safety_distance):
             ve = np.clip(self.path_to_follow.s_max-self.s, -0.5, 0.5)
             dve = -np.clip(ds, -0.5, 0.5)*(np.abs(ds) <= 0.5)
 
@@ -190,6 +223,31 @@ class PFController():
         dVr = Kth*np.tanh(dVr/Kth)
 
         return dVr, heading
+
+    def takeoff_control(self):
+        Xd = self.takeoff_XYZ+np.array([0, 0, self.sm.takeoff_alt])
+        Vd = 0.25
+        X = self.state[:3]
+        R = Rotation.from_euler('XYZ', angles=self.state[6:9], degrees=False)
+        Vr = self.state[3:6]
+        V = R.apply(Vr)
+        k1 = 2
+        k0 = Vd*k1
+        u = k1*(-V)+k0*np.tanh(1.5*(Xd-X))
+        return R.apply(u, inverse=True)
+
+    def land_control(self, land_XY):
+        land_target = 0.07
+        Xd = np.array([*land_XY, land_target])
+        Vd = 0.25
+        X = self.state[:3]
+        R = Rotation.from_euler('XYZ', angles=self.state[6:9], degrees=False)
+        Vr = self.state[3:6]
+        V = R.apply(Vr)
+        k1 = 2
+        k0 = Vd*k1
+        u = k1*(-V)+k0*np.tanh(Xd-X)
+        return R.apply(u, inverse=True)
 
     def update_state(self, data):
         self.state = np.array([*data.data])
