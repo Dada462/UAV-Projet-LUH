@@ -38,6 +38,7 @@ class ActionServer():
         self.battery_threshold = 20  # 20 V for the real drone, 12 V in simulation
         self.battery_voltage = -inf
         self.battery_too_low=False
+        self.pathError=False
 
         rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
         self.path_pub = rospy.Publisher(
@@ -99,8 +100,16 @@ class ActionServer():
             return
         else:
             self.SM.userInput = FOLLOWPATH
+        if self.pathError:
+            self.pfc.end_of_path = self.pfc.state[:3]
+            print('[FAIL] Path computation, check path planner')
+            result.result = result.UNKNOWN_ERROR
+            self.followPathServer.set_aborted(result)
+            self.SM.userInput = 'WAIT'
+            self.pathError=False
+            return
         while self.distance_to_goal > 0.1 and not rospy.is_shutdown():
-            if self.followPathServer.is_preempt_requested() or self.SM.userInput != 'FOLLOWPATH' or self.battery_too_low:
+            if self.followPathServer.is_preempt_requested() or self.SM.userInput != 'FOLLOWPATH' or self.battery_too_low or self.pathError:
                 if self.followPathServer.is_preempt_requested():
                     print('[FAIL] Path was cancelled by the planner')
                 pathInterrupted = True
@@ -135,7 +144,8 @@ class ActionServer():
         self.pfc.s = 0
         self.SM.userInput = 'WAIT'
         self.pfc.pathIsComputed = False
-
+        self.pathError=False
+    
     def LandExecute_cb(self, goal):
         self.landing_successful = None
         r = rospy.Rate(15)
@@ -223,6 +233,7 @@ class ActionServer():
             print('[FAIL] Takeoff was interrupted')
             result.result = result.UNKNOWN_ERROR
             self.TakeoffServer.set_aborted(result)
+            self.SM.userInput=LAND
 
         elif not TakeoffInterrupted and not rospy.is_shutdown():
             print('[SUCCES] Takeoff was successful')

@@ -39,7 +39,7 @@ class RobotModeState():
         self.takeoff_successful = True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
-        rospy.Subscriber('/pf_controller/user_input', String, self.userInputCallback)
+        # rospy.Subscriber('/pf_controller/user_input', String, self.userInputCallback)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
@@ -103,16 +103,17 @@ class RobotModeState():
                         '[WARNING] The robot should be landed but it\'s not grounded. Going into INIT State')
                     self.state = INIT
                 if self.userInput == HOVER:
-                    self.set_mode_srv(0, GUIDED)
-                    sleep(0.05)
-                    while not self.armed:
+                    if self.mode!=GUIDED:
+                        self.set_mode_srv(0, GUIDED)
+                        sleep(0.05)
+                    try_idx=0
+                    while not self.armed or try_idx < 3:
                         arm_successful = self.arming_srv(True)
+                        sleep(0.5)
                         if not arm_successful:
                             print(
-                                '[INFO] Not able to arm, check the system\'s state')
-                            break
-                        else:
-                            sleep(0.5)
+                                '[INFO] Not able to arm, check the system\'s state, trying to arm '+str(1+try_idx)+'/3')
+                        try_idx+=1
                     resp = self.takeoff_srv(0, 0, 0, 0, self.first_stage_alt)
                     self.takeoffAccepted = resp.success
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:
