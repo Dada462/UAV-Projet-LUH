@@ -72,6 +72,7 @@ class PFController():
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_pid()
                 if np.isnan(u).any() or np.isnan(heading).any() or np.isinf(u).any() or np.isinf(heading).any():
+                    self.ActionServer.pathError=True
                     print(
                         '[WARNING] Commands are NAN or INFINITE, check the path ! Zero will be sent as command as a security measure.')
                     u, heading = np.zeros(3), 0
@@ -134,6 +135,8 @@ class PFController():
 
     def init_path(self, points=[], speeds=[], headings=[]):
         if len(points) != 0:
+            print('Speed received:',np.mean(speeds),np.min(speeds),np.max(speeds),' m/s')
+            speeds=np.clip(speeds,0.01,2)
             self.pathIsComputed = False
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')
@@ -170,23 +173,24 @@ class PFController():
         e = Rpath.T@(X-F.X)
         s1, y1, w1 = e
         # S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
-        S = np.array([F.k2*w1+F.k1*y1+1, -F.k1*s1, -F.k2*s1])  # PTF
+        S = np.array([F.k2*w1+F.k1*y1-1, -F.k1*s1, -F.k2*s1])  # PTF
         Vp = Rtheta@Vr
         ks = 2
         ds = Vp[0]+ks*s1
-        if s < 0.05 and ds < -1:
-            ds = 0
+        end_points= ((s < 0.05) and (ds < 0)) or ((self.path_to_follow.s_max-s < 0.03) and (ds > 0))
+        ds=(1-end_points)*ds
         self.ds = ds
         dRpath = ds*F.dR
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
-        de = Rtheta@Vr-ds*S
+        # de = Rtheta@Vr-ds*S
+        de = Vp+ds*S
         ds1, dy1, dw1 = de
 
         self.error = 100*np.linalg.norm(e, ord=np.inf)
 
         e1 = np.array([0, y1, w1])
         de1 = np.array([0, dy1, dw1])
-        Ke, _, k0, k1, Kth = 2.25, 1.5, 2, 2, 3
+        Ke, k0, k1, Kth = 2.25, 1, 1.55, 3
         vc = F.speed
         heading = F.heading
         # Ke,vc,k0,k1,Kth=self.displayer.values
@@ -201,7 +205,8 @@ class PFController():
         a = np.clip(a, 0.2, 1.75)
         vc = np.clip(vc, 0.2, a)
 
-        kpath = 0.55
+        # kpath = 0.55
+        kpath = .85
         d_path = np.linalg.norm(e1/kpath)
         ve = vc*(1-np.tanh(d_path))
         dve = -vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
@@ -214,8 +219,7 @@ class PFController():
         t = -Ke*np.clip(Vp[0]**2, -2, 2)*np.array([1, 0, 0]) * \
             np.tanh(F.C/5)*6/(1+d_path1)
 
-        dVp = np.array([dve+2*(ve-Vp[0]), 0, 0])-k1 * \
-            np.clip(de1, -2, 2)-k0*np.clip(e1, -1.5, 1.5)+t
+        dVp = np.array([dve+2*(ve-Vp[0]), 0, 0])-k1*de1-k0*np.clip(e1, -1.5, 1.5)+t
 
         # Acceleration commands
         dVr = Rtheta.T@(dVp-dRtheta@Vr)

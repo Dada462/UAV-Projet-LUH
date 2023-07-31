@@ -14,8 +14,7 @@ class RobotState():
                          TwistStamped, self.body_velocity_info)
         # rospy.Subscriber("/mavros/local_position/pose",
         #                  PoseStamped, self.local_pose_info)
-        rospy.Subscriber("/mavros/vision_pose/pose",
-                         PoseStamped, self.local_pose_info)
+        rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, self.local_pose_info)
         self.pub = rospy.Publisher(
             '/robot_state', Float32MultiArray, queue_size=10)
         self.robot_state_pub()

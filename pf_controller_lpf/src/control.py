@@ -170,18 +170,19 @@ class PFController():
 
         Rtheta = Rpath.T@Rm
         # Error and its derivatives
+        Vp=Rtheta@Vr
         e = Rpath.T@(X-F.X)
         s1, y1, w1 = e
         ks = 1.5
-        ds = (Rtheta@Vr)[0]+ks*s1
-        if s < 0.05 and ds < 0:
-            ds = 0
+        ds = Vp[0]+ks*s1
+        end_points= ((s < 0.05) and (ds < 0)) or ((self.path_to_follow.s_max-s < 0.03) and (ds > 0))
+        ds=(1-end_points)*ds
         self.ds = ds
         dRpath = F.dR*ds
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
 
-        S = np.array([F.k2*w1+F.k1*y1+1, -F.k1*s1, -F.k2*s1])  # PTF
-        de = Rtheta@Vr-ds*S
+        S = np.array([F.k2*w1+F.k1*y1-1, -F.k1*s1, -F.k2*s1])  # PTF
+        de = Vp+ds*S
         ds1, dy1, dw1 = de
 
         Vpath, k0, k1, kpath, _, c1, amax = 0.5, 1.5, 1.5, 0.4, 1.5, 50, 0.5

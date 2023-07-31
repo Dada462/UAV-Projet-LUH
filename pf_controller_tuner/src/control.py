@@ -174,7 +174,7 @@ class PFController():
         dt = 1/30
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         dRm = Rm@self.adj(wr)
 
         X = X+3*dt*Rm@Vr
@@ -230,10 +230,10 @@ class PFController():
         Vp = -Vpath*np.tanh(e1/kpath)+np.array([ve, 0, 0])
 
         Rd = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         data = Rd@self.imuData
         Rd1 = Rotation.from_euler(
-            'XYZ', [0, 0, self.state[8]], degrees=False).as_matrix()
+            'XYZ', [0, 0, self.state[8]], degrees=False).as_dcm()
         data = Rd1.T@data
         data[2] = data[2]-9.81
 
@@ -259,7 +259,7 @@ class PFController():
         wr = self.state[9:12]
 
         Rm = Rotation.from_euler(
-            'XYZ', angles=self.state[6:9], degrees=False).as_matrix()
+            'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         dRm = Rm@self.adj(wr)
 
         # Path properties
@@ -288,7 +288,9 @@ class PFController():
 
         e1 = np.array([0, y1, w1])
         de1 = np.array([0, dy1, dw1])
-        Ke, _, k0, k1, Kth = 2.25, 1.5, 2, 2, 3
+        Ke, Kth = 2.25,3
+        k0=1.5
+        k1=2.5
         vc = F.speed
         heading = F.heading
         # Ke,vc,k0,k1,Kth=self.displayer.values
@@ -351,13 +353,14 @@ class PFController():
         u = k1*(-V)+k0*np.tanh(Xd-X)
         return R.apply(u, inverse=True)
 
-    def joint_point(self,target=np.array([0,-5,0.5])):
+    def joint_point(self,target=np.array([4,0,0.7])):
         X=self.state[:3]
         R=Rotation.from_euler('XYZ',self.state[6:9],degrees=False)
         V=R.apply(self.state[3:6])
-        k1=1.75
-        k0=1
-        dV= -k1*V+k0*np.clip((target-X),-2,2)
+        Vd = 0.3
+        k1=np.array([1.75,1.75,2])
+        k0 = Vd*k1
+        dV= -k1*V+k0*np.clip((target-X),-1,1)
         dVr=R.apply(dV,inverse=True)
         return dVr
 
