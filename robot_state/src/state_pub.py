@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""
+Package gathering the state of the robot and republishing it in one array.
+The state is published as a Float32MultiArray:
+state=[x,y,z,vx,vy,vz,euler_angle_X,euler_angle_Y,euler_angle_Z,w_x,w_y,w_z]
+The Euler angles (rd) convention is 'XYZ'. 
+w_x,w_y,w_z, are the angular speeds (rd/s) expressed in the body-frame.
+The speeds vx,vy and vz (m/s) are expressed in the body-frame of the UAV.
+"""
+
 import rospy
 from std_msgs.msg import Float32MultiArray
 from geometry_msgs.msg import TwistStamped, PoseStamped
@@ -6,40 +15,19 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
+
 class RobotState():
     def __init__(self):
         self.state = np.zeros(12)
         rospy.init_node('robot_state_listener', anonymous=True)
-        rospy.Subscriber("/mavros/local_position/velocity_body",
+        rospy.Subscriber("/mavros/local_position/velocity_body",  # This is where the speeds are obtained
                          TwistStamped, self.body_velocity_info)
-        # rospy.Subscriber("/mavros/local_position/pose",
-        #                  PoseStamped, self.local_pose_info)
-        rospy.Subscriber("/mavros/vision_pose/pose", PoseStamped, self.local_pose_info)
+        # This is where the position is obtained
+        rospy.Subscriber("/mavros/vision_pose/pose",
+                         PoseStamped, self.local_pose_info)
         self.pub = rospy.Publisher(
             '/robot_state', Float32MultiArray, queue_size=10)
         self.robot_state_pub()
-
-    def quaternion_to_euler(self, q):
-        # Extract components of the quaternion
-        w, x, y, z = q
-
-        # Compute Euler angles using the ZYX convention
-        sinr_cosp = 2.0 * (w*x + y*z)
-        cosr_cosp = 1.0 - 2.0 * (x*x + y*y)
-        roll = np.arctan2(sinr_cosp, cosr_cosp)
-
-        sinp = 2.0 * (w*y - z*x)
-        if np.abs(sinp) >= 1:
-            pitch = np.copysign(np.pi/2, sinp)
-        else:
-            pitch = np.arcsin(sinp)
-
-        siny_cosp = 2.0 * (w*z + x*y)
-        cosy_cosp = 1.0 - 2.0 * (y*y + z*z)
-        yaw = np.arctan2(siny_cosp, cosy_cosp)
-
-        # Return Euler angles in radians
-        return np.array([yaw, pitch, roll])
 
     def body_velocity_info(self, data):
         u, v, w = data.twist.linear.x, data.twist.linear.y, data.twist.linear.z

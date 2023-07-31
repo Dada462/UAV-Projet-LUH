@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Package with functions allowing the computation of the properties such as curvature, twist and company.
+"""
+
 import numpy as np
 from numpy.linalg import norm
 from numpy import pi, cos, sin
@@ -27,13 +31,23 @@ def R(theta, which='2D'):
     return r
 
 
-class pathInfo():
+class pathInfo():  # a class containing the local properties of the path at a given curvilinear abscissa (used further down).
     def __init__(self):
         pass
 
 
 class Path_3D():
     def __init__(self, *args, **kwargs):
+        """
+        This precompute all the properties of the path before the UAV follows it.
+        It should be used as such depending on the type of entry given:
+            # my_points should be 3D (3,nb_of_points) and heading,speeds 1D (nb_of_points).
+            p = Path_3D(my_points, speeds=my_speeds,headings=my_headings, type='waypoints')
+
+            ####or####
+
+            p=Path_3D(parametric_function,range=[a,b],type='parametric') # paramtetric_function(t) 3D vector output, with a<=t<=b a real number.
+        """
         if len(args) != 0:
             if 'type' not in kwargs:
                 raise ValueError(
@@ -61,6 +75,7 @@ class Path_3D():
             # self.compute_path_properties()
             # self.compute_path_properties_PTF()
 
+    # computes the properties at a given curvilinear abscissa 's'.
     def __call__(self, s):
         return self.local_info(s)
 
@@ -77,6 +92,15 @@ class Path_3D():
         return np.array([A[2, 1], A[0, 2], A[1, 0]])
 
     def compute_path_properties_PTF(self):
+        """
+        The frame used on the path is the Parallel Transport Frame. More details in the original publication:
+        "Parallel Transport Approach to Curve Framing" by |Andrew J. Hanson and Hui Ma
+                                                          |Department of Computer Science
+                                                          |Lindley Hall 215
+                                                          |Indiana University
+                                                          |Blo omington, IN 47405
+                                                          |January 11, 1995
+        """
         points = self.points.T
         # each column of points is a point
         df = np.gradient(points, axis=1)
@@ -224,82 +248,8 @@ class Path_3D():
         self.s_to_headings = interpolate.interp1d(s, self.headings)
         path_computed_successfully = True
         return path_computed_successfully
-    def compute_path_properties(self):
-        points = self.points.T
-        df = np.gradient(points, axis=1)
-        ds = norm(df, axis=0)
-        self.ds = ds
-        s = np.cumsum(ds)
-        s = s-s[0]
-        self.s_max = np.max(s)
 
-        d2f_ds = np.gradient(df/ds, axis=1)
-        C = norm(d2f_ds/ds, axis=0)
-        dC = np.gradient(C)/ds
-
-        s1 = df/ds
-        y1 = np.gradient(s1, axis=1)
-        y1 = y1/(norm(y1, axis=0)+1e-6)
-        w1 = np.cross(s1, y1, axis=0)
-
-        ds1 = np.gradient(s1, axis=1)/ds
-        dy1 = np.gradient(y1, axis=1)/ds
-        dw1 = np.gradient(w1, axis=1)/ds
-
-        n = ds1.shape[1]
-        dR = np.zeros((n, 3, 3))
-        # for i in range(n):
-        #     dR[i]=np.array([ds1[:,i],dy1[:,i],dw1[:,i]]).T
-        # print(dR[i])
-        # print(ds1[:,i],dy1[:,i],dw1[:,i])
-
-        dR = np.stack((ds1.T, dy1.T, dw1.T), axis=1)
-        dR = np.transpose(dR, axes=(0, 2, 1))
-
-        # R=np.stack((s1.T,y1.T,w1.T),axis=1)
-        # R=np.transpose(dR,axes=(0,2,1))
-
-        Tr = -np.sum(dw1*y1, axis=0)
-        dTr = np.gradient(Tr)/ds
-
-        self.s = s
-        s_to_XYZ = interpolate.interp1d(s, points)
-        s_to_C = interpolate.interp1d(s, C)
-        s_to_dC = interpolate.interp1d(s, dC)
-        s_to_s1 = interpolate.interp1d(s, s1)
-        s_to_y1 = interpolate.interp1d(s, y1)
-        s_to_w1 = interpolate.interp1d(s, w1)
-        s_to_dsyw = interpolate.interp1d(s, dR, axis=0)
-        s_to_Tr = interpolate.interp1d(s, Tr)
-        s_to_dTr = interpolate.interp1d(s, dTr)
-
-        self.s_to_C = s_to_C
-        self.s_to_dC = s_to_dC
-        self.s_to_XY = s_to_XYZ
-        self.s_to_s1 = s_to_s1
-        self.s_to_y1 = s_to_y1
-        self.s_to_w1 = s_to_w1
-        self.s_to_dsyw = s_to_dsyw
-        self.s_to_Tr = s_to_Tr
-        self.s_to_dTr = s_to_dTr
-
-        s_to_ds1 = interpolate.interp1d(s, ds1)
-        s_to_dy1 = interpolate.interp1d(s, dy1)
-        s_to_dw1 = interpolate.interp1d(s, dw1)
-        self.s_to_ds1 = s_to_ds1
-        self.s_to_dy1 = s_to_dy1
-        self.s_to_dw1 = s_to_dw1
-
-        # def gauss(x):
-        #     return np.exp(-x**2/2)/np.sqrt(2*pi)
-
-        # T = np.linspace(-1, 1, 100)*2
-        # k = gauss(T)
-        # k = k/np.sum(k)*2
-        # y = np.convolve(dC, k, mode='same')
-        # yd = np.abs(C[0]+np.cumsum(y*ds))
-        # self.max_speed = interpolate.interp1d(s, yd)
-
+    # computes the properties at a given curvilinear abscissa 's'.
     def local_info(self, s):
         local_property = pathInfo()
 

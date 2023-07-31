@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+Package dealing with state of the robot.
+It allows actions to be sequentialized.
+It also allows the detection of wheter or not the user has taken over therefore putting the UAV in
+PILOT mode where no commands are sent anymore.
+"""
+
 from rospy import sleep
 import rospy
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
@@ -30,7 +37,12 @@ class RobotModeState():
         self.blockCommands = True
         self.armed = None
         self.mode = None
-        self.takeoff_alt = 0.5
+        """
+        Takeoff is in two stages. 
+        The first stage is done with the takeoff service to 25 cm.
+        The second stage, manually from 25 cm to the takeoff altitude target.
+        """
+        self.takeoff_alt = 0.5 # This will be changed dynamically by the action server who receives the target height.
         self.first_stage_alt = 0.25
         self.altitude = -1
         self.userInput = None
@@ -39,7 +51,6 @@ class RobotModeState():
         self.takeoff_successful = True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
-        # rospy.Subscriber('/pf_controller/user_input', String, self.userInputCallback)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
@@ -77,8 +88,13 @@ class RobotModeState():
             rate.sleep()
 
     def stateMachine(self):
+        """
+        State Machine taking into account the userInput, the state of the UAV 
+        and others class attributes (that are changed by the Action Server) 
+        in order to change the state of the UAV.
+        """
         alt_error = 0.1
-        if self.altitude == -1:
+        if self.altitude == -1: # Detects if the SLAM has not started
             go_on = False
         else:
             go_on = True

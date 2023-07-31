@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Package incoporating the LPF path-following controller.
+"""
+
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -72,6 +76,7 @@ class PFController():
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_lpf()
                 if np.isnan(u).any() or np.isnan(heading).any() or np.isinf(u).any() or np.isinf(heading).any():
+                    self.ActionServer.pathError=True
                     print(
                         '[WARNING] Commands are NAN or INFINITE, check the path ! Zero will be sent as command as a security measure.')
                     u, heading = np.zeros(3), 0
@@ -133,7 +138,12 @@ class PFController():
             rate.sleep()
 
     def init_path(self, points=[], speeds=[], headings=[]):
+        """
+        Create the path to follow
+        """
         if len(points) != 0:
+            print('Speed received:',np.mean(speeds),np.min(speeds),np.max(speeds),' m/s')
+            speeds=np.clip(speeds,0.01,2)
             self.pathIsComputed = False
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')
@@ -150,6 +160,10 @@ class PFController():
         return path_computed_successfully
 
     def control_lpf(self):
+        """
+        Path-following algorithm.
+        The parameters are explained & can be changed further down.
+        """
         # Robot state
         X = self.state[0:3]
         Vr = self.state[3:6]
@@ -161,6 +175,14 @@ class PFController():
             'XYZ', angles=self.state[6:9], degrees=False).as_dcm()
         dRm = Rm@self.adj(wr)
 
+        """
+        This predicts the future state to deal with the fact that the UAV
+        takes time to change orientation, thus creating a delay on the thrust.
+        example: if the robot is tilted left and needs to go right fast, it
+        first needs to turn right such that the thrust is aligned with the direction.
+        This change in orientation is a delay that can be cause the drone to overshoot in
+        higly curved turns.
+        """
         X = X+3*dt*Rm@Vr
         s = s+3*self.ds*dt
         Rm = Rm+3*dRm*dt
@@ -204,7 +226,12 @@ class PFController():
         a = np.clip(a, 0.25, 1.75)
         nu_d = np.clip(nu_d, 0.25, a)
 
-        # vplin = (Rtheta@Vr)[0]
+        """
+        Paramaters:
+            -kpath: critical distance to the path/agressivity of the controller with regards to the path. 
+                    A small value will result in a more agressive control to stay on the path.
+                    Bigger values will result in a smoother converge to the path and but slower.
+        """
         d_path = np.linalg.norm(e1/kpath)
         ve = nu_d*(1-np.tanh(d_path))
         dve = -nu_d/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)

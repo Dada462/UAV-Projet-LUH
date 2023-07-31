@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+"""
+Package incoporating the PID path-following controller.
+"""
+
 import numpy as np
 import rospy
 from std_msgs.msg import Float32MultiArray
@@ -134,6 +138,9 @@ class PFController():
             rate.sleep()
 
     def init_path(self, points=[], speeds=[], headings=[]):
+        """
+        Create the path to follow
+        """
         if len(points) != 0:
             print('Speed received:',np.mean(speeds),np.min(speeds),np.max(speeds),' m/s')
             speeds=np.clip(speeds,0.01,2)
@@ -153,6 +160,10 @@ class PFController():
         return path_computed_successfully
 
     def control_pid(self):
+        """
+        Path-following algorithm.
+        The parameters are explained & can be changed further down.
+        """
         # Robot state
         X = self.state[0:3]
         Vr = self.state[3:6]
@@ -182,7 +193,6 @@ class PFController():
         self.ds = ds
         dRpath = ds*F.dR
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
-        # de = Rtheta@Vr-ds*S
         de = Vp+ds*S
         ds1, dy1, dw1 = de
 
@@ -190,12 +200,21 @@ class PFController():
 
         e1 = np.array([0, y1, w1])
         de1 = np.array([0, dy1, dw1])
+        """
+        Paramaters:
+            -Ke: how much the robot should slow down in highly curved turns. Should not be changed normally.
+            -k0: proportional gain regarding the commands in the PD controller.
+            -k1: derivative gain regarding the command in the PD controller.
+            -Kth: saturation of the acceleration commands (currently maxed at 3 m/s²)
+            -kpath: critical distance to the path/agressivity of the controller with regards to the path. 
+                    A small value will result in a more agressive control to stay on the path.
+                    Bigger values will result in a smoother converge to the path and but slower.
+        """
         Ke, k0, k1, Kth = 2.25, 1, 1.55, 3
+        kpath = .85
+        
         vc = F.speed
         heading = F.heading
-        # Ke,vc,k0,k1,Kth=self.displayer.values
-
-        # Slowing down term when highly curved turn is encountered
 
         # Look ahead curvature
         s = np.linspace(s, s+1.5, 50)
@@ -205,17 +224,27 @@ class PFController():
         a = np.clip(a, 0.2, 1.75)
         vc = np.clip(vc, 0.2, a)
 
-        # kpath = 0.55
-        kpath = .85
         d_path = np.linalg.norm(e1/kpath)
         ve = vc*(1-np.tanh(d_path))
         dve = -vc/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
         safety_distance = np.clip(1.5*vc, 1, 2.5)
+        """
+        This is what slows down the drone towards the end of the path.
+        The bigger the speeds the sooner on the path the drone should start breaking to not overshoot the end point.
+        This deals with the fact that the UAV takes time to change orientation, 
+        thus creating a delay on the thrust.
+        example: if the robot is tilted left and needs to go right fast, it
+        first needs to turn right such that the thrust is aligned with the direction.
+        This change in orientation is a delay that can be cause the drone to overshoot in
+        higly curved turns.
+        """
+
         if ((self.path_to_follow.s_max-self.s) < safety_distance):
             ve = np.clip(self.path_to_follow.s_max-self.s, -0.5, 0.5)
             dve = -np.clip(ds, -0.5, 0.5)*(np.abs(ds) <= 0.5)
 
         d_path1 = np.linalg.norm(e/kpath)
+        # Slowing down term when highly curved turn is encountered
         t = -Ke*np.clip(Vp[0]**2, -2, 2)*np.array([1, 0, 0]) * \
             np.tanh(F.C/5)*6/(1+d_path1)
 
@@ -230,7 +259,7 @@ class PFController():
 
     def takeoff_control(self):
         Xd = self.takeoff_XYZ+np.array([0, 0, self.sm.takeoff_alt])
-        Vd = 0.25
+        Vd = 0.25 # speeds with which the UAV takesoff (m/s)
         X = self.state[:3]
         R = Rotation.from_euler('XYZ', angles=self.state[6:9], degrees=False)
         Vr = self.state[3:6]
