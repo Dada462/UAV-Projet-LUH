@@ -12,7 +12,7 @@ from PyQt5.QtCore import Qt
 import pyqtgraph.opengl as gl
 from scipy.spatial.transform import Rotation
 from std_msgs.msg import String
-from geometry_msgs.msg import TwistStamped,Vector3
+from geometry_msgs.msg import TwistStamped, Vector3
 pg.setConfigOptions(antialias=True)
 
 
@@ -193,10 +193,6 @@ class plot2D(QtWidgets.QMainWindow):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, PF_controller=None, *args, **kwargs):
         super(MainWindow, self).__init__(*args, **kwargs)
-        if __name__ != '__main__':
-            self.commands_sender = rospy.Publisher(
-                '/user_input', String, queue_size=10)
-
         self.w = GLViewWidget_Modified()
         self.setCentralWidget(self.w)
         self.resize(850, 750)
@@ -213,9 +209,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(gx)
         self.w.addItem(axis)
 
-        # r=Rotation.from_euler('ZYX',(45,0,0),degrees=True).as_matrix()
-        # verts=(verts-vcenter)@r.T+vcenter
-
         # self.vehicle_mesh = RobotMesh(np.diag([0.6, 0.6, 0.35]))
         self.vehicle_mesh = RobotMesh(0.25*np.eye(3))
         self.vehicle = gl.GLMeshItem(vertexes=self.vehicle_mesh.vertices,
@@ -230,22 +223,24 @@ class MainWindow(QtWidgets.QMainWindow):
         keyboard_mode = QPushButton(self)
         land_button = QPushButton(self)
         waypoint_button = QPushButton(self)
+        OA_button = QPushButton(self)
 
         start_mission.setText('Follow Path')
         stop_mission.setText('Home')
         hover.setText('Hover')
         reset_mission.setText('Reset Data')
-        keyboard_mode.setText('Keyboard')
+        keyboard_mode.setText('KeyB')
         land_button.setText('Land')
-        waypoint_button.setText('Waypoint')
+        OA_button.setText('OA')
 
         start_mission.setGeometry(QtCore.QRect(0, 0, 100, 25))
         stop_mission.setGeometry(QtCore.QRect(105, 0, 100, 25))
         hover.setGeometry(QtCore.QRect(205, 0, 100, 25))
         reset_mission.setGeometry(QtCore.QRect(305, 0, 100, 25))
-        keyboard_mode.setGeometry(QtCore.QRect(505, 0, 100, 25))
         land_button.setGeometry(QtCore.QRect(405, 0, 100, 25))
+        keyboard_mode.setGeometry(QtCore.QRect(505, 0, 100, 25))
         waypoint_button.setGeometry(QtCore.QRect(605, 0, 100, 25))
+        OA_button.setGeometry(QtCore.QRect(705, 0, 100, 25))
 
         start_mission.clicked.connect(self.start_recording_mission)
         stop_mission.clicked.connect(self.stop_recording_mission)
@@ -254,16 +249,12 @@ class MainWindow(QtWidgets.QMainWindow):
         keyboard_mode.clicked.connect(self.keyboard_pub)
         land_button.clicked.connect(self.land_pub)
         waypoint_button.clicked.connect(self.waypoint_pub)
+        OA_button.clicked.connect(self.OA_pub)
 
         self.robot_info_label_1 = QLabel(self)
         self.robot_info_label_1.setText('')
         self.robot_info_label_1.setFixedSize(100, 100)
         self.robot_info_label_1.move(10, 650)
-
-        # self.parameters_box = QLineEdit(self)
-        # self.parameters_box.move(600, 0)
-        # self.parameters_box.resize(150, 25)
-        # self.parameters_box.setText('0.4,1,2.5,1,1.5')
 
         self.mission_state = {'start': False,
                               'go_home': True, 'keyboard': False}
@@ -274,8 +265,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pos_counter = 0
         self.state = None
         self.pfc = PF_controller
-        self.path_points=np.zeros((1,3))
-        self.oa_path_points=np.zeros((1,3))
+        self.path_points = np.zeros((1, 3))
+        self.oa_path_points = np.zeros((1, 3))
         self.i = 0
 
         # Position trace
@@ -285,26 +276,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.w.addItem(self.trace)
 
         if __name__ != '__main__':
-            self.speed_pub = rospy.Publisher('/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
+            self.commands_sender = rospy.Publisher(
+                '/pf_controller/user_input', String, queue_size=10)
+            self.speed_pub = rospy.Publisher(
+                '/mavros/setpoint_velocity/cmd_vel', TwistStamped, queue_size=10)
             # Path
             self.path = gl.GLLinePlotItem(
                 color='#3486F4', width=3, antialias=True)
-            self.path.setGLOptions('opaque')
             self.oa_path = gl.GLLinePlotItem(
                 color='#f3a60b', width=3, antialias=True)
-            self.oa_path.setGLOptions('opaque')
             self.point_to_follow = gl.GLScatterPlotItem(
                 size=0.25, color=(52/255, 244/255, 76/255, 1), pxMode=False)
             self.velodyne = gl.GLScatterPlotItem(
                 size=0.05, color=(243/255, 25/255, 11/255, 0.5), pxMode=False)
+            self.text_A=gl.GLTextItem(color='red',text='A')
+            self.text_vel=gl.GLTextItem(color='red',text='')
+            
+            self.path.setGLOptions('opaque')
+            self.oa_path.setGLOptions('opaque')
             self.velodyne.setGLOptions('opaque')
             self.point_to_follow.setGLOptions('translucent')
-            # self.path.setData(pos=self.pfc.path_to_follow.points[:,:3])
 
             self.w.addItem(self.path)
             self.w.addItem(self.oa_path)
             self.w.addItem(self.point_to_follow)
             self.w.addItem(self.velodyne)
+            self.w.addItem(self.text_A)
+            self.w.addItem(self.text_vel)
         else:
             # Path
             self.point_to_follow = gl.GLScatterPlotItem(
@@ -314,18 +312,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # params = ['νpath', 'k0', 'k1','Kpath','ν','c1','amax'] # V4
         params = ['T', 'zmin', 'zmax', 'k0', 'k1']  # Thrust test
-        # params = ['Ke','ν','k0','k1','Kth'] # PID
-        default_values = list(np.load('params.npy'))
+        try:
+            default_values = list(np.load('params.npy'))
+        except:
+            default_values = list(np.zeros_like(params))
         if len(default_values) != len(params):
             default_values = np.zeros(len(params))
         self.nb_of_params = len(params)
         self.params = params
         self.values = default_values
         self.create_params_boxes()
-        self.control_output = gl.GLLinePlotItem(
-            width=3, color=(0, 0, 1, 1), glOptions='opaque')
-        self.w.addItem(self.control_output)
-        
+
         self.key_ids = [Qt.Key_Z, Qt.Key_S, Qt.Key_Q,
                         Qt.Key_D, Qt.Key_A, Qt.Key_E, 56, 53]
         self.keyboard = np.zeros(len(self.key_ids))
@@ -433,23 +430,31 @@ class MainWindow(QtWidgets.QMainWindow):
             self.trace.setData(pos=self.positions[:self.pos_counter, :3])
             self.path.setData(pos=self.path_points)
             self.oa_path.setData(pos=self.oa_path_points)
+            
+            # OA & velodyne
+            self.text_A.setData(pos=self.oa_path_points[0])
+            closest_vel_point=self.closest_vel_point
+            d=np.round(self.closest_vel_point_distance,2)
+            self.s1_arrow.setData(pos=np.vstack((self.state[:3],closest_vel_point)))
+            self.text_vel.setData(pos=(self.state[:3]+closest_vel_point)/2,text=str(d))
+            
             self.point_to_follow.setData(pos=self.s_pos)
             self.velodyne.setData(pos=self.vel)
             self.i += 1
             self.keyboard = self.w.keyboard
 
             if self.mission_state['keyboard']:
-                u=self.keyboard
-                u=np.array([[1,-1,0,0,0,0,0,0],
-                            [0,0,1,-1,0,0,0,0],
-                            [0,0,0,0,0,0,1,-1],
-                            [0,0,0,0,1,-1,0,0]])@u
-                msg=TwistStamped()
-                Rm=Rotation.from_euler('XYZ',self.state[6:9],degrees=False)
-                u[:3]=Rm.apply(u[:3])
-                dz=1.5*(1.5-self.state[2])-1*self.state[5]
-                msg.twist.linear=Vector3(*1*u[:2],dz)
-                msg.twist.angular=Vector3(0,0,3.5*u[3])
+                u = self.keyboard
+                u = np.array([[1, -1, 0, 0, 0, 0, 0, 0],
+                              [0, 0, 1, -1, 0, 0, 0, 0],
+                              [0, 0, 0, 0, 0, 0, 1, -1],
+                              [0, 0, 0, 0, 1, -1, 0, 0]])@u
+                msg = TwistStamped()
+                Rm = Rotation.from_euler('XYZ', self.state[6:9], degrees=False)
+                u[:3] = Rm.apply(u[:3])
+                dz = 1.5*(0.6-self.state[2])-1*self.state[5]
+                msg.twist.linear = Vector3(*1*u[:2], dz)
+                msg.twist.angular = Vector3(0, 0, 3.5*u[3])
                 self.speed_pub.publish(msg)
 
     def start_recording_mission(self):
@@ -476,36 +481,38 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.mission_state['start'] = False
         self.mission_state['keyboard'] = False
-        # self.pfc.s=0
-        # self.positions=self.positions*0
-    
+
     def keyboard_pub(self):
-        self.mission_state['keyboard']=True
+        self.mission_state['keyboard'] = True
         self.commands_sender.publish(String('KEYBOARD'))
 
     def hover_pub(self):
-        self.mission_state['keyboard']=False
+        self.mission_state['keyboard'] = False
         self.commands_sender.publish(String('HOVER'))
 
     def land_pub(self):
-        self.mission_state['keyboard']=False
+        self.mission_state['keyboard'] = False
         self.commands_sender.publish(String('LAND'))
-    
+
     def waypoint_pub(self):
-        self.mission_state['keyboard']=False
+        self.mission_state['keyboard'] = False
         self.commands_sender.publish(String('WAYPOINT'))
+
+    def OA_pub(self):
+        self.mission_state['keyboard'] = True
+        self.commands_sender.publish(String('OA'))
 
     def reset_mission_data(self):
         # self.pfc.s = 0
         self.positions = self.positions*0
         # self.pfc.PID.I=0
-        self.pos_counter=0
+        self.pos_counter = 0
         self.data_to_plotx = []
         self.data_to_ploty1 = []
         self.data_to_ploty2 = []
         self.data_to_ploty3 = []
 
-    def update_state(self, state, s_pos, error, vel):
+    def update_state(self, state, s_pos, error, vel,closest_point,closest_distance):
         self.state = state
         self.s_pos = s_pos
         self.vel = vel
@@ -515,6 +522,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vehicle_mesh.rotate('XYZ', state[6:9])
         self.pos_counter = (self.pos_counter+1) % (10**4)
         self.error = error
+        self.closest_vel_point=closest_point
+        self.closest_vel_point_distance=closest_distance
 
     def sawtooth(self, x):
         return (x+pi) % (2*pi)-pi   # or equivalently 2*arctan(tan(x/2))

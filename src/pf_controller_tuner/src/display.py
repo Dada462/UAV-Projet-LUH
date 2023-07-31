@@ -28,8 +28,11 @@ class MD():
             t=rospy.Time.now().to_time()-t0
             self.p.plot(t,self.state[0],id='x',color='cornflowerblue')
             self.p.plot(t,self.state[1],id='y',color='lime')
+            self.p.plot(t,self.state[2],id='z',color='red')
             # self.p.plot(t,self.state[2],id='z',color='cornflowerblue')
-            self.p.plot(t,2,id='2',color='tomato')
+            # self.p.plot(t,2,id=1)
+            # self.p.plot(t,2,id=2)
+            self.p.plot(t,4,id='1')
             rate.sleep()
     
     def update_state_callback(self,data):

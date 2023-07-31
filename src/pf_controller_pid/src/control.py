@@ -140,7 +140,7 @@ class PFController():
         e = Rpath.T@(X-F.X)
         s1, y1, w1 = e
         # S=np.array([1-F.C*y1, F.C*s1-w1*F.Tr,F.Tr*y1])
-        S = np.array([F.k2*w1+F.k1*y1+1, -F.k1*s1, -F.k2*s1])  # PTF
+        S = np.array([F.k2*w1+F.k1*y1-1, -F.k1*s1, -F.k2*s1])  # PTF
         Vp = Rtheta@Vr
         ks = 2
         ds = Vp[0]+ks*s1
@@ -149,7 +149,7 @@ class PFController():
         self.ds = ds
         dRpath = ds*F.dR
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
-        de = Rtheta@Vr-ds*S
+        de = Vp+ds*S
         ds1, dy1, dw1 = de
 
         self.error = 100*np.linalg.norm(e, ord=np.inf)

@@ -22,6 +22,7 @@ class PID():
         self.data = self.data+data
         self.data = np.clip(self.data, -bound, bound)
 
+
 class PFController():
     def __init__(self):
         rospy.init_node('pf_controller_tuner', anonymous=True)
@@ -62,7 +63,7 @@ class PFController():
         s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
-        self.closest_obstacle_distance=np.inf
+        self.closest_obstacle_distance = np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
@@ -86,9 +87,10 @@ class PFController():
                 last_heading = heading
                 accel_command_pub.publish(command)
                 ############################## Acceleration Topic ##############################
-            elif self.sm.userInput == 'HOME' and self.sm.state!='PILOT':
-                position_to_join=self.joint_point(target=np.array([0,0,0.5]))
-                heading=0
+            elif self.sm.userInput == 'HOME' and self.sm.state != 'PILOT':
+                position_to_join = self.joint_point(
+                    target=np.array([0, 0, 0.5]))
+                heading = 0
                 command = PositionTarget()
                 command.header.stamp = rospy.Time().now()
                 command.coordinate_frame = PositionTarget.FRAME_BODY_NED
@@ -99,9 +101,9 @@ class PFController():
                 command.yaw_rate = 0.5*sawtooth(heading-self.state[8])
                 accel_command_pub.publish(command)
                 self.s = self.ds = 0
-            elif self.sm.userInput == 'WAYPOINT' and self.sm.state!='PILOT':
-                position_to_join=self.joint_point()
-                heading=0
+            elif self.sm.userInput == 'WAYPOINT' and self.sm.state != 'PILOT':
+                position_to_join = self.joint_point()
+                heading = 0
                 command = PositionTarget()
                 command.header.stamp = rospy.Time().now()
                 command.coordinate_frame = PositionTarget.FRAME_BODY_NED
@@ -219,7 +221,6 @@ class PFController():
         a = np.clip(a, 0.25, 1.75)
         nu_d = np.clip(nu_d, 0.25, a)
 
-        # vplin = (Rtheta@Vr)[0]
         d_path = np.linalg.norm(e1/kpath)
         ve = nu_d*(1-np.tanh(d_path))
         dve = -nu_d/kpath*(1-np.tanh(d_path)**2)*de1@e1/(1e-6+d_path)
@@ -250,7 +251,7 @@ class PFController():
         r = Rotation.from_rotvec(F.w1*angle)
         dVr = r.apply(dVr)
         return dVr, heading
-    
+
     def control_pid(self):
         # Robot state
         X = self.state[0:3]
@@ -265,7 +266,6 @@ class PFController():
         # Path properties
         F = self.path_to_follow.local_info(s)
         Rpath = F.R
-
         Rtheta = Rpath.T@Rm
 
         # Error and its derivatives
@@ -351,14 +351,14 @@ class PFController():
         u = k1*(-V)+k0*np.tanh(Xd-X)
         return R.apply(u, inverse=True)
 
-    def joint_point(self,target=np.array([0,-5,0.5])):
-        X=self.state[:3]
-        R=Rotation.from_euler('XYZ',self.state[6:9],degrees=False)
-        V=R.apply(self.state[3:6])
-        k1=1.75
-        k0=1
-        dV= -k1*V+k0*np.clip((target-X),-2,2)
-        dVr=R.apply(dV,inverse=True)
+    def joint_point(self, target=np.array([0, -5, 0.5])):
+        X = self.state[:3]
+        R = Rotation.from_euler('XYZ', self.state[6:9], degrees=False)
+        V = R.apply(self.state[3:6])
+        k1 = 1.75
+        k0 = 1
+        dV = -k1*V+k0*np.clip((target-X), -2, 2)
+        dVr = R.apply(dV, inverse=True)
         return dVr
 
     def update_state(self, data):

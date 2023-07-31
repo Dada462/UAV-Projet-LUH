@@ -7,7 +7,7 @@ from uavr_nav_msgs.msg import LandAction, LandFeedback, LandResult
 from sensor_msgs.msg import BatteryState
 from std_msgs.msg import Float32MultiArray
 from numpy import array, inf, round
-from time import sleep
+from rospy import sleep
 
 
 class ActionServer():
@@ -15,12 +15,16 @@ class ActionServer():
         global INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING
         global STABILIZE, GUIDED, LAND, LOITER
         global HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER
+        global OA,ATCP,RCP, OAPC
         # States
         INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING = 'INIT', 'LANDED', 'HOVERING', 'CONTROL', 'PILOT', 'TAKEOFF', 'STOPPING', 'LANDING'
+        ATCP, OA= 'ATCP', 'OA'
         # Modes
         STABILIZE, GUIDED, LAND, LOITER = 'STABILIZE', 'GUIDED', 'LAND', 'LOITER'
         # User inputs
         HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER = 'HOVER', 'LAND', 'FOLLOWPATH', 'PILOT_TAKEOVER'
+        RCP, OAPC = 'RCP', 'OAPC'
+
 
         self.followPath_result = None
         self.takeoff_successful = None
@@ -38,17 +42,19 @@ class ActionServer():
         self.battery_threshold = 12  # 21 V for the real drone, 12 V in simulation
         self.battery_voltage = -inf
         self.battery_too_low=False
-        
+        self.oa_failed=False
+
         rospy.Subscriber('/mavros/battery', BatteryState, self.batteryCallback)
         self.path_pub = rospy.Publisher(
             '/path/points/ptf', Float32MultiArray, queue_size=1)
+
         self.followPathServer = actionlib.SimpleActionServer(
             'followPath', FollowPathAction, execute_cb=self.followPathExecute_cb)
         self.TakeoffServer = actionlib.SimpleActionServer(
             'Takeoff', TakeoffAction, execute_cb=self.TakeoffExecute_cb)
         self.LandServer = actionlib.SimpleActionServer(
             'Land', LandAction, execute_cb=self.LandExecute_cb)
-
+        
         self.followPathServer.start()
         self.TakeoffServer.start()
         self.LandServer.start()
@@ -98,17 +104,22 @@ class ActionServer():
             return
         else:
             self.SM.userInput = FOLLOWPATH
+        
         while self.distance_to_goal > 0.1 and not rospy.is_shutdown():
-            if self.followPathServer.is_preempt_requested() or self.SM.userInput != 'FOLLOWPATH' or self.battery_too_low:
+            # state=self.SM.state
+            # fpc=state==FOLLOWPATH or (state==STOPPING and (self.SM.userInput==OA or self.SM.userInput ==RCP)) or state==ATCP or state==OA
+            nfpc=self.SM.userInput not in [OA,RCP,FOLLOWPATH,OAPC]
+            if self.followPathServer.is_preempt_requested() or nfpc or self.battery_too_low or self.oa_failed:
                 if self.followPathServer.is_preempt_requested():
-                    print('[FAIL] Path was cancelled by the planner')
+                    print('[FAIL] Path was cancelled by the user')
                 pathInterrupted = True
                 break
+
             followPathFeedback.distance_to_goal = self.distance_to_goal
             followPathFeedback.closest_obstacle = self.pfc.closest_obstacle_distance
             self.followPathServer.publish_feedback(followPathFeedback)
             r.sleep()
-
+        
         result.distance_to_goal = self.distance_to_goal
         if pathInterrupted:
             self.pfc.end_of_path = self.pfc.state[:3]
@@ -135,6 +146,7 @@ class ActionServer():
         self.pfc.s = 0
         self.SM.userInput = 'WAIT'
         self.pfc.pathIsComputed = False
+        self.oa_failed=False
 
     def LandExecute_cb(self, goal):
         self.landing_successful = None
@@ -181,12 +193,6 @@ class ActionServer():
         Takeoff_fb = TakeoffFeedback()
         desired_height, delay = goal.agl, goal.delay
         height = self.pfc.state[2]
-        self.pfc.takeoff_XYZ = self.pfc.state[:3]
-        self.pfc.takeoff_heading = self.pfc.state[8]
-        self.SM.takeoff_alt = desired_height
-        self.SM.first_stage_alt = height+0.25
-        delay = delay.to_sec()
-        sleep(delay)
         if self.SM.state != LANDED:
             if self.SM.state == PILOT:
                 result.result = result.USER_TOOK_OVER
@@ -205,6 +211,13 @@ class ActionServer():
                 result.result = result.UNKNOWN_ERROR
                 self.TakeoffServer.set_aborted(result)
                 return
+        self.pfc.takeoff_XYZ = self.pfc.state[:3]
+        self.pfc.takeoff_heading = self.pfc.state[8]
+        self.SM.takeoff_alt = desired_height
+        self.SM.first_stage_alt = height+0.25
+        self.SM.first_stage_alt = 0.25
+        delay = delay.to_sec()
+        sleep(delay)
         self.SM.userInput = HOVER
         height = self.pfc.state[2]
         TakeoffInterrupted = False

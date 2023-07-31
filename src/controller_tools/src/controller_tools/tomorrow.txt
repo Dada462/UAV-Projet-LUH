@@ -1,0 +1,4 @@
+#
+-check AB computation
+(-vectorise path computation)
+-define when OA correctly

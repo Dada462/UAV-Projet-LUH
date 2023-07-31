@@ -1,29 +1,31 @@
 #!/usr/bin/env python3
-from time import sleep
+from rospy import sleep
 import rospy
 from mavros_msgs.srv import SetMode, CommandBool, CommandTOL, VehicleInfoGet
 from mavros_msgs.msg import State
 from std_msgs.msg import String, Float32MultiArray
 from geometry_msgs.msg import PoseStamped
 from controller_tools.ActionServer import ActionServer
-from std_msgs.msg import String
 import numpy as np
 import threading
 
 
 class RobotModeState():
     def __init__(self):
-        global INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING
+        global INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING, ATCP
         global STABILIZE, GUIDED, LAND, LOITER
-        global HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, NOT_GUIDED
+        global HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER
         global INIT_LAND, INIT_FOLLOWPATH, INIT_HOVER
+        global OA,ATCP,RCP, OAPC, STOPPED, GOOZ,RATCP
 
         # States
         INIT, LANDED, HOVERING, CONTROL, PILOT, TAKEOFF, STOPPING, LANDING = 'INIT', 'LANDED', 'HOVERING', 'CONTROL', 'PILOT', 'TAKEOFF', 'STOPPING', 'LANDING'
+        ATCP, OA, STOPPED, GOOZ= 'ATCP', 'OA', 'STOPPED', 'GOOZ'
         # Modes
         STABILIZE, GUIDED, LAND, LOITER = 'STABILIZE', 'GUIDED', 'LAND', 'LOITER'
         # User inputs
-        HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, NOT_GUIDED = 'HOVER', 'LAND', 'FOLLOWPATH', 'PILOT_TAKEOVER', 'NOT_GUIDED'
+        HOVER, LAND, FOLLOWPATH, PILOT_TAKEOVER, OA = 'HOVER', 'LAND', 'FOLLOWPATH', 'PILOT_TAKEOVER', 'OA'
+        RCP, OAPC, RATCP= 'RCP', 'OAPC', 'RATCP'
         # Init inputs
         INIT_LAND, INIT_FOLLOWPATH, INIT_HOVER = 'INIT_LAND', 'INIT_FOLLOWPATH', 'INIT_HOVER'
 
@@ -38,9 +40,12 @@ class RobotModeState():
         self.takeoffAccepted = False
         self.landAccepted = False
         self.takeoff_successful = True
+        self.safe_pos_computed=False
+        self.is_safe_zone=True
 
         rospy.Subscriber("/mavros/state", State, self.setState)
-        rospy.Subscriber('user_input', String, self.userInputCallback)
+        rospy.Subscriber('/pf_controller/user_input',
+                         String, self.userInputCallback)
         rospy.Subscriber('/robot_state', Float32MultiArray, self.stateCallback)
 
         rospy.wait_for_service('/mavros/set_mode')
@@ -71,7 +76,7 @@ class RobotModeState():
         i = 0
         while not rospy.is_shutdown():
             self.stateMachine()
-            if i % (2*f) == 0:
+            if i % (f//3) == 0:
                 print(self)
                 i = 0
             i += 1
@@ -173,8 +178,46 @@ class RobotModeState():
                 if self.mode != expectedMode or self.mode == LOITER:
                     self.state = PILOT
                 else:
+                    if self.userInput == HOVER or self.userInput == LAND or self.userInput == OA:
+                        self.state = STOPPING
+            elif self.state == STOPPED:
+                expectedMode = GUIDED
+                if self.mode != expectedMode or self.userInput == PILOT_TAKEOVER:
+                    self.state = PILOT
+                else:
                     if self.userInput == HOVER or self.userInput == LAND:
                         self.state = STOPPING
+                    elif self.userInput in [OA,RCP] and self.is_safe_zone:
+                        self.state = ATCP
+                    elif self.userInput in [OA,RCP] and not self.is_safe_zone and self.safe_pos_computed:
+                        self.state = GOOZ
+            elif self.state == ATCP:
+                expectedMode = GUIDED
+                if self.mode != expectedMode or self.mode == LOITER:
+                    self.state = PILOT
+                else:
+                    if self.userInput == HOVER or self.userInput == LAND:
+                        self.state = STOPPING
+                    elif self.userInput == OAPC:
+                        self.state = OA
+            elif self.state == OA:
+                expectedMode = GUIDED
+                if self.mode != expectedMode or self.mode == LOITER:
+                    self.state = PILOT
+                else:
+                    if self.userInput == HOVER or self.userInput == LAND or self.userInput == RCP:
+                        self.state = STOPPING
+                    elif self.userInput == FOLLOWPATH:
+                        self.state = CONTROL
+            elif self.state == GOOZ:
+                expectedMode = GUIDED
+                if self.mode != expectedMode or self.mode == LOITER:
+                    self.state = PILOT
+                else:
+                    if self.userInput == HOVER or self.userInput == LAND:
+                        self.state = STOPPING
+                    elif self.userInput == RATCP:
+                        self.state = ATCP
             elif self.state == STOPPING:
                 expectedMode = GUIDED
                 if self.mode != expectedMode or self.mode == LOITER:
@@ -191,6 +234,8 @@ class RobotModeState():
                         sleep(.05)
                         if self.landAccepted and self.mode == LAND:
                             self.state = LANDING
+                    elif self.speed < 0.1 and (self.userInput == OA or self.userInput == RCP):
+                        self.state = STOPPED
                     elif self.speed < 0.1:
                         self.state = HOVERING
 

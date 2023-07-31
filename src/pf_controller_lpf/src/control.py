@@ -151,8 +151,8 @@ class PFController():
         dRpath = F.dR*ds
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
 
-        S = np.array([F.k2*w1+F.k1*y1+1, -F.k1*s1, -F.k2*s1])  # PTF
-        de = Rtheta@Vr-ds*S
+        S = np.array([F.k2*w1+F.k1*y1-1, -F.k1*s1, -F.k2*s1])  # PTF
+        de = Vp+ds*S
         ds1, dy1, dw1 = de
 
         Vpath, k0, k1, kpath, _, c1, amax = 0.5, 1.5, 1.5, 0.4, 1.5, 50, 0.5
