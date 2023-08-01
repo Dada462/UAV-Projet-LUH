@@ -67,7 +67,7 @@ class PFController():
         s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
-        self.closest_obstacle_distance=np.inf
+        self.closest_obstacle_distance = np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
@@ -76,7 +76,7 @@ class PFController():
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_pid()
                 if np.isnan(u).any() or np.isnan(heading).any() or np.isinf(u).any() or np.isinf(heading).any():
-                    self.ActionServer.pathError=True
+                    self.ActionServer.pathError = True
                     print(
                         '[WARNING] Commands are NAN or INFINITE, check the path ! Zero will be sent as command as a security measure.')
                     u, heading = np.zeros(3), 0
@@ -142,8 +142,9 @@ class PFController():
         Create the path to follow
         """
         if len(points) != 0:
-            print('Speed received:',np.mean(speeds),np.min(speeds),np.max(speeds),' m/s')
-            speeds=np.clip(speeds,0.01,2)
+            print('Speed received:', np.mean(speeds),
+                  np.min(speeds), np.max(speeds), ' m/s')
+            speeds = np.clip(speeds, 0.01, 2)
             self.pathIsComputed = False
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')
@@ -188,8 +189,9 @@ class PFController():
         Vp = Rtheta@Vr
         ks = 2
         ds = Vp[0]+ks*s1
-        end_points= ((s < 0.05) and (ds < 0)) or ((self.path_to_follow.s_max-s < 0.03) and (ds > 0))
-        ds=(1-end_points)*ds
+        end_points = ((s < 0.05) and (ds < 0)) or (
+            (self.path_to_follow.s_max-s < 0.03) and (ds > 0))
+        ds = (1-end_points)*ds
         self.ds = ds
         dRpath = ds*F.dR
         dRtheta = dRpath.T@Rm+Rpath.T@dRm
@@ -212,7 +214,7 @@ class PFController():
         """
         Ke, k0, k1, Kth = 2.25, 1, 1.55, 3
         kpath = .85
-        
+
         vc = F.speed
         heading = F.heading
 
@@ -248,7 +250,8 @@ class PFController():
         t = -Ke*np.clip(Vp[0]**2, -2, 2)*np.array([1, 0, 0]) * \
             np.tanh(F.C/5)*6/(1+d_path1)
 
-        dVp = np.array([dve+2*(ve-Vp[0]), 0, 0])-k1*de1-k0*np.clip(e1, -1.5, 1.5)+t
+        dVp = np.array([dve+2*(ve-Vp[0]), 0, 0])-k1 * \
+            de1-k0*np.clip(e1, -1.5, 1.5)+t
 
         # Acceleration commands
         dVr = Rtheta.T@(dVp-dRtheta@Vr)
@@ -259,7 +262,7 @@ class PFController():
 
     def takeoff_control(self):
         Xd = self.takeoff_XYZ+np.array([0, 0, self.sm.takeoff_alt])
-        Vd = 0.25 # speeds with which the UAV takesoff (m/s)
+        Vd = 0.25  # speeds with which the UAV takesoff (m/s)
         X = self.state[:3]
         R = Rotation.from_euler('XYZ', angles=self.state[6:9], degrees=False)
         Vr = self.state[3:6]

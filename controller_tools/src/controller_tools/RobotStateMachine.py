@@ -42,7 +42,7 @@ class RobotModeState():
         The first stage is done with the takeoff service to 25 cm.
         The second stage, manually from 25 cm to the takeoff altitude target.
         """
-        self.takeoff_alt = 0.5 # This will be changed dynamically by the action server who receives the target height.
+        self.takeoff_alt = 0.5  # This will be changed dynamically by the action server who receives the target height.
         self.first_stage_alt = 0.25
         self.altitude = -1
         self.userInput = None
@@ -94,7 +94,7 @@ class RobotModeState():
         in order to change the state of the UAV.
         """
         alt_error = 0.1
-        if self.altitude == -1: # Detects if the SLAM has not started
+        if self.altitude == -1:  # Detects if the SLAM has not started
             go_on = False
         else:
             go_on = True
@@ -114,22 +114,22 @@ class RobotModeState():
                     self.state = INIT
                 self.userInput = ''
             elif self.state == LANDED:
-                if self.altitude > 0.1 and self.armed and self.speed>0.1:
+                if self.altitude > 0.1 and self.armed and self.speed > 0.1:
                     print(
                         '[WARNING] The robot should be landed but it\'s not grounded. Going into INIT State')
                     self.state = INIT
                 if self.userInput == HOVER:
-                    if self.mode!=GUIDED:
+                    if self.mode != GUIDED:
                         self.set_mode_srv(0, GUIDED)
                         sleep(0.05)
-                    try_idx=0
+                    try_idx = 0
                     while not self.armed or try_idx < 3:
                         arm_successful = self.arming_srv(True)
                         sleep(0.5)
                         if not arm_successful:
                             print(
                                 '[INFO] Not able to arm, check the system\'s state, trying to arm '+str(1+try_idx)+'/3')
-                        try_idx+=1
+                        try_idx += 1
                     resp = self.takeoff_srv(0, 0, 0, 0, self.first_stage_alt)
                     self.takeoffAccepted = resp.success
                     if self.mode == GUIDED and self.armed and self.takeoffAccepted:

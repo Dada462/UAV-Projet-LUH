@@ -114,7 +114,7 @@ class ActionServer():
             self.SM.userInput = FOLLOWPATH
         """ This also check for path computation errors.
         It was put in place because some errors in the path received
-        could not be fixed. Thus a special variable was need to detect that.
+        could not be detected directly. Thus a special variable was needed to detect that.
         """
         if self.pathError:
             self.pfc.end_of_path = self.pfc.state[:3]

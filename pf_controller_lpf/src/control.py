@@ -67,7 +67,7 @@ class PFController():
         s_pos = self.end_of_path = np.zeros(3)
         self.error = 0.
         last_heading = 0
-        self.closest_obstacle_distance=np.inf
+        self.closest_obstacle_distance = np.inf
         while not rospy.is_shutdown():
             if self.pathIsComputed:
                 s_pos = self.path_to_follow.local_info(self.s).X
@@ -76,7 +76,7 @@ class PFController():
             if self.sm.state == 'CONTROL' and self.sm.userInput != 'HOME' and self.sm.userInput != 'WAIT' and self.pathIsComputed:
                 u, heading = self.control_lpf()
                 if np.isnan(u).any() or np.isnan(heading).any() or np.isinf(u).any() or np.isinf(heading).any():
-                    self.ActionServer.pathError=True
+                    self.ActionServer.pathError = True
                     print(
                         '[WARNING] Commands are NAN or INFINITE, check the path ! Zero will be sent as command as a security measure.')
                     u, heading = np.zeros(3), 0
@@ -142,8 +142,9 @@ class PFController():
         Create the path to follow
         """
         if len(points) != 0:
-            print('Speed received:',np.mean(speeds),np.min(speeds),np.max(speeds),' m/s')
-            speeds=np.clip(speeds,0.01,2)
+            print('Speed received:', np.mean(speeds),
+                  np.min(speeds), np.max(speeds), ' m/s')
+            speeds = np.clip(speeds, 0.01, 2)
             self.pathIsComputed = False
             self.path_to_follow = Path_3D(
                 points, speeds=speeds, headings=headings, type='waypoints')
@@ -192,13 +193,14 @@ class PFController():
 
         Rtheta = Rpath.T@Rm
         # Error and its derivatives
-        Vp=Rtheta@Vr
+        Vp = Rtheta@Vr
         e = Rpath.T@(X-F.X)
         s1, y1, w1 = e
         ks = 1.5
         ds = Vp[0]+ks*s1
-        end_points= ((s < 0.05) and (ds < 0)) or ((self.path_to_follow.s_max-s < 0.03) and (ds > 0))
-        ds=(1-end_points)*ds
+        end_points = ((s < 0.05) and (ds < 0)) or (
+            (self.path_to_follow.s_max-s < 0.03) and (ds > 0))
+        ds = (1-end_points)*ds
         self.ds = ds
         dRpath = F.dR*ds
         dRtheta = dRpath.T@Rm+Rpath.T@dRm

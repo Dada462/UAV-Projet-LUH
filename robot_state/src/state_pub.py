@@ -15,7 +15,6 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 
-
 class RobotState():
     def __init__(self):
         self.state = np.zeros(12)

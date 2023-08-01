@@ -15,7 +15,7 @@ The second method deals with this issue by being linear locally and is best suit
 There are three main packages: **pf_controller_lpf**, **pf_controller_pid** & **robot_state**. More detailed descriptions can be found in the *.py* files.
 
 ### Controllers
-The first two packages are the two different controllers. They use the tools located in the **controller_tools** script package (contains .py files with useful functions).
+The first two packages are the two different controllers. They use the tools located in the **controller_tools** script package (contains .py files with useful functions). The parameters of the controllers can be found in the .py files. There are more details on what can be changed and an explanation for each parameter.
 
 ### Control Tools
 The **controller_tools** has three main files: *ActionServer.py*, *RootStateMachine.py* & *tools.py*. The Action Server handles the path-following, landing and takeoff actions being sent by the user. The Robot State Machine handles the state of the robot and allows user takeover safely. At last, *tools.py* contains the functions necessary to compute the path properties such as curvature, twisting etc.
@@ -34,9 +34,9 @@ The speeds (m/s) are expressed in the body-frame of the UAV.
 
 ### Installation
 You can create a folder **uav_controller** inside **YOUR_CATKIN_WORKSPACE/src**.
-Place all the files inside the **uav_controller** folder
+Place all the files inside the **uav_controller** folder.
 
-Build the packages
+Build the packages:
 
 ```console
 cd YOUR_CATKIN_WORKSPACE
